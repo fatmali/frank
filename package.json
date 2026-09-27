@@ -1,0 +1,14 @@
+{
+  "name": "rubber-duck",
+  "version": "0.0.1",
+  "description": "A decision-forcing rubber duck for the agent era. BYOM, local-first.",
+  "type": "commonjs",
+  "bin": {
+    "duck": "bin/duck.js"
+  },
+  "scripts": {
+    "test": "node test/run.js"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}

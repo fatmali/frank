@@ -234,10 +234,26 @@ and that layer belongs to you.
 
 ## Status
 
-🥚 Early. This document is the vision, not the software yet. The first thing
-we're building — and the first thing worth proving — is written up in
-[docs/mvp-spec.md](docs/mvp-spec.md): the interaction protocol and the retro
-loop, in a CLI harness, before any pixels.
+🐣 Phase 0 is alive. This document is the vision; the spec lives in
+[docs/mvp-spec.md](docs/mvp-spec.md); and a working **no-brain CLI prototype**
+now proves the machinery — the interaction protocol, the local decision records,
+and the retro loop — with **zero API keys and no network.**
+
+```bash
+node bin/duck.js --dial devil     # talk through a decision
+node bin/duck.js retro            # follow up on decisions that are due
+node bin/duck.js log              # list your decisions
+npm test                          # drive a full session + retro, assert the guarantees
+```
+
+Why no-brain first? The thesis is that *structure* forces ownership — the duck
+never needed to be smart. If a heuristic duck with no model can still march you
+to a committed, owned decision, the idea holds, and a real model (Phase 2) only
+sharpens the questions. This is the README's "no-brain mode," shipped first on
+purpose.
+
+Still to prove: whether it produces *felt* ownership with a human in the loop
+(Phase 1), and how much a real model sharpens it (Phase 2).
 
 - **First to prove:** the interaction protocol + the retro loop — does talking
   to the duck actually force a decision you own and stop reopening? That's the
