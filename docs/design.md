@@ -4,7 +4,6 @@ Engineering design for Rubber Duck: a decision-forcing rubber duck for the agent
 era. Bring-your-own-model, local-first, open source.
 
 - **Vision & positioning:** [../README.md](../README.md)
-- **The riskiest bet, spelled out:** [mvp-spec.md](mvp-spec.md)
 - **This doc:** requirements, data model, high-level design, and the work plan.
 
 Priority tags used throughout: **[MVP]** (Phase 0–1, must exist to prove the
@@ -342,9 +341,9 @@ for the remainder of the session; the record notes the effective `model_used`.
 
 ## 6. Work Plan
 
-### Phase 0 — Prove the machinery ✅ *done*
+### Phase 0 — Prove the machinery *(no keys needed)*
 No-brain CLI: conductor state machine, hard rules, `.duck/` records, retro loop;
-headless end-to-end test asserting the guarantees. **Exit (met):** a full session
+headless end-to-end test asserting the guarantees. **Exit:** a full session
 commits an owned record and the retro reopens/logs/closes it, with no model.
 
 ### Phase 1 — Prove felt ownership *(no keys needed)*
@@ -352,8 +351,8 @@ Wizard-of-Oz sessions (a human plays the brain) against real decisions.
 **Deliverables:** a lightweight session-capture script; 8–10 logged sessions;
 findings written back into the conductor's question set and the Phase 2 prompt.
 **Exit:** most sessions end with the user reporting the decision as *theirs*, and
-describing the experience as being helped to think, not answered (mvp-spec
-success criteria #2, #5). If not, iterate the protocol before Phase 2.
+describing the experience as being helped to think, not answered (success
+metrics in §8). If not, iterate the protocol before Phase 2.
 
 ### Phase 2 — Add a real brain (BYOM)
 `Brain`/`Provider` interfaces; `ModelBrain` + `HeuristicBrain`; adapters for

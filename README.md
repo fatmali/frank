@@ -234,33 +234,14 @@ and that layer belongs to you.
 
 ## Status
 
-🐣 Phase 0 is alive. This document is the vision; the full engineering spec —
+🥚 Design stage. This README is the vision; the full engineering spec —
 requirements, data model, high-level design, and work plan — lives in
-[docs/design.md](docs/design.md) (with the riskiest bet detailed in
-[docs/mvp-spec.md](docs/mvp-spec.md)); and a working **no-brain CLI prototype**
-now proves the machinery — the interaction protocol, the local decision records,
-and the retro loop — with **zero API keys and no network.**
-
-```bash
-node bin/duck.js --dial devil     # talk through a decision
-node bin/duck.js retro            # follow up on decisions that are due
-node bin/duck.js log              # list your decisions
-npm test                          # drive a full session + retro, assert the guarantees
-```
-
-Why no-brain first? The thesis is that *structure* forces ownership — the duck
-never needed to be smart. If a heuristic duck with no model can still march you
-to a committed, owned decision, the idea holds, and a real model (Phase 2) only
-sharpens the questions. This is the README's "no-brain mode," shipped first on
-purpose.
-
-Still to prove: whether it produces *felt* ownership with a human in the loop
-(Phase 1), and how much a real model sharpens it (Phase 2).
+[docs/design.md](docs/design.md). No implementation yet; the repo is docs-first
+on purpose, so the protocol is settled before any code.
 
 - **First to prove:** the interaction protocol + the retro loop — does talking
   to the duck actually force a decision you own and stop reopening? That's the
-  novel, risky part, and it can be validated in the cheapest possible harness
-  (even a CLI) before any pixels.
+  novel, risky part, and it gets validated before any pixels.
 - **Where it wants to live:** a lightweight desktop presence — the "sticky duck
   on your screen" with a global hotkey — is the real home, because that's where
   decision overload happens. But the window is the easy part; the protocol is
