@@ -234,7 +234,10 @@ and that layer belongs to you.
 
 ## Status
 
-🥚 Early. This document is the vision, not the software yet.
+🥚 Early. This document is the vision, not the software yet. The first thing
+we're building — and the first thing worth proving — is written up in
+[docs/mvp-spec.md](docs/mvp-spec.md): the interaction protocol and the retro
+loop, in a CLI harness, before any pixels.
 
 - **First to prove:** the interaction protocol + the retro loop — does talking
   to the duck actually force a decision you own and stop reopening? That's the
