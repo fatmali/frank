@@ -234,8 +234,10 @@ and that layer belongs to you.
 
 ## Status
 
-🐣 Phase 0 is alive. This document is the vision; the spec lives in
-[docs/mvp-spec.md](docs/mvp-spec.md); and a working **no-brain CLI prototype**
+🐣 Phase 0 is alive. This document is the vision; the full engineering spec —
+requirements, data model, high-level design, and work plan — lives in
+[docs/design.md](docs/design.md) (with the riskiest bet detailed in
+[docs/mvp-spec.md](docs/mvp-spec.md)); and a working **no-brain CLI prototype**
 now proves the machinery — the interaction protocol, the local decision records,
 and the retro loop — with **zero API keys and no network.**
 
