@@ -111,7 +111,8 @@ Other sessions follow the same shape:
   screen, always on top. He's draggable, remembers his position, and can be
   toggled from the menu bar icon or settings.
 - **FR-4 [M1]** Frank shows his state at a glance on the menu bar icon or the
-  sticky duck: idle, listening, thinking, done.
+  sticky duck: idle, listening, thinking, judging (he found something worth
+  a look), done.
 
 ### 3.2 Input
 

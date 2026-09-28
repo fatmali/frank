@@ -1,104 +1,186 @@
-# 🦆 Frank
+<div align="center">
 
-**A duck you can talk to when you're overwhelmed.**
+```
+                 .-"""""-.
+               .'         '.
+              /    .---.    \
+             |    ( (o) )    \_______
+             |     '---'      _______>
+              \              /
+               '.          .'
+          .------'        '------.
+         /                        \
+        |    F   R   A   N   K     |
+         \                        /
+          '-.____________________.'
+             ~~~~~~~~~~~~~~~~~~~~
+```
 
-Meet Frank. He's a duck, and he's frank.
+# Frank
 
-Your agent just handed you a plan. Somewhere in it are the calls that matter:
-the options it laid out, and the choices it made without asking, like a new
-dependency, a schema change, or "apply it everywhere." You're not sure which
-ones are right. Press a hotkey and Frank pops up with the plan already loaded.
-He points out the calls worth a second look, checks them against your actual
-code, talks each one through with you, and helps you land on the right
-answer. Then he hands your decisions back to your agent and gets out of your
-way.
+**He's a duck. He's frank. He will not tell you your plan is great.**
 
-Open source. Runs on your machine. Works with the AI subscription you already
-have.
+*A duck you can talk to when your AI agent hands you a plan and your brain
+quietly leaves the building.*
+
+</div>
+
+---
+
+## The situation
+
+Your agent just wrote you a 47-step plan. You read step 1. You skimmed step
+2. You clicked **Approve**, because you always click Approve.
+
+Step 31 adds Redis. You don't have Redis. You're going to find that out
+around 6pm on a Friday.
+
+You're not alone. People approve
+[93% of Claude Code's permission prompts](https://www.anthropic.com/engineering/claude-code-auto-mode).
+That isn't reviewing. That's a reflex with a keyboard.
+
+**Frank is the duck that makes you actually look.** Press a hotkey and he
+shows up with your plan already open. He finds the handful of calls that
+matter, checks them against your real code, talks them through with you, and
+hands your agent a note with your decisions. Then he leaves. No small talk.
+
+```
+   your agent           Frank                you              your agent
+   writes a      --->   finds the     --->   make the  --->   gets a note:
+   47-step plan         5 calls that         calls            "keep this,
+                        actually matter      (with a duck)     change that"
+```
+
+Open source. Runs on your machine. Uses the AI subscription you already pay
+for, because you don't need another one.
 
 ---
 
 ## How it works
 
-1. **Summon him.** Press `⌥ Space` (you can change it) or click Frank in your
-   menu bar. Hold the key to talk, or just type.
-2. **He finds the plan.** Frank picks up the plan your coding agent just
-   wrote, along with your repo and the files the plan touches. You don't
-   paste anything.
-3. **He spots the calls that matter.** He lists the few decisions in the plan
-   worth a second look, hardest to undo first:
-   - options the plan offers,
-   - choices it made quietly,
-   - assumptions that might not hold in your code.
-4. **He talks them through with you.** One at a time: the options side by
-   side, one good question, and checks against your code. Ask *"what would
-   you do?"* and you get a straight answer with reasons.
-5. **Back to work.** Frank writes a short note with your decisions, ready to
-   paste to your agent, and tucks himself away.
+1. **Summon him.** Press `⌥ Space`, or click Frank in your menu bar. Hold
+   the key to talk, or type if you're in an open-plan office and have some
+   dignity left.
+2. **He finds the plan.** Frank grabs the plan your agent just wrote, plus
+   your repo and the files the plan touches. You don't paste anything.
+3. **He spots the calls that matter.** Five at most, hardest to undo first:
+   - **options the plan offers:** "Redis or in memory?"
+   - **choices it made without asking:** new dependencies, schema changes,
+     "let's apply this to every route"
+   - **assumptions that don't hold:** "there is no Redis in this repo,
+     buddy"
+4. **He talks them through with you.** One call at a time: the options side
+   by side, one good question, and receipts from your actual code. Ask
+   *"what would you do?"* and you get a straight answer. He doesn't hedge.
+   He's a duck.
+5. **Back to work.** Frank writes a short note for your agent (keep this,
+   change that, drop this), copies it, and goes back to wherever ducks go.
 
 Also good for: comparing two plans, sanity-checking an idea before you ask
-your agent, or just the bug you've been stuck on for an hour.
+your agent, and the bug you've been staring at for an hour while telling
+yourself you're "close."
 
-### Sticky mode
+---
 
-By default Frank lives in your menu bar and only appears when you call him.
-If you'd like him on screen all the time, turn on **sticky mode**. He'll sit
-in a corner, always on top, and you can drag him wherever you like.
-
-## What it looks like
+## A typical Frank session
 
 ```
 You  ⌥ Space  "not sure about this plan"
 
-🦆  Claude Code's plan from 3 min ago: "Add rate limiting to the API"
-    Three calls worth a look:
-    1. Store counts in Redis        (plan's choice; alternative: in memory)
-    2. Apply to every route         (plan's choice; alternative: /api/public only)
-    3. Add express-rate-limit       (new dependency)
-    Start with 1?
+ __
+(o )>  Claude Code's plan from 3 min ago: "Add rate limiting to the API"
+       Three calls worth a look:
+       1. Store counts in Redis        (the plan decided this for you)
+       2. Apply to every route         (including /health, apparently)
+       3. Add express-rate-limit       (new dependency)
+       Start with 1?
 
 You  "yeah"
 
-🦆  Redis vs in memory:
-                  Redis                   In memory
-    Undo later    harder (new service)    easy
-    Effort        Redis + config + ops    about 1 file
-    Works for     many instances          one instance
+ __
+(o_)>  Redis vs in memory:
+                     Redis                    In memory
+       Undo later    painful (new service)    easy
+       Effort        Redis + config + ops     about one file
+       Works for     many instances           one instance
 
-    Also: I don't see Redis anywhere in your repo or docker-compose.
-    Are you running more than one instance?
+       Also, I looked. There is no Redis in your repo or your
+       docker-compose. Are you running more than one instance?
 
 You  "no, just one"
 
-🦆  Then in memory. The plan's Redis choice solves a problem you don't
-    have yet. Next, every route: your /health check is on that list...
+ __
+(^ )>  Then in memory. The plan is solving a scaling problem you
+       don't have. Next: it wants to rate-limit /health, which means
+       your load balancer gets throttled and declares you dead...
 
-    ...
+       ...
 
-🦆  Note for your agent (copied):
-    "Go ahead with these changes: in-memory counters instead of Redis;
-     only /api/public, not /health; keep express-rate-limit."
-    Go ship. 🦆
+       Note for your agent (copied):
+       "Go ahead with these changes: in-memory counters instead of
+        Redis; only /api/public, not /health; keep express-rate-limit."
+
+       Go ship. Quack.
 ```
 
-## Use the subscription you already have
+---
 
-Frank needs a model to think with. Most developers already pay for one, so
-Frank can use it:
+## Frank's moods
 
-| You have | How Frank uses it |
+He shows these in your menu bar, so you always know where you stand.
+
+```
+  idle        listening      thinking       judging        done
+   __           __             __             __             __
+  (o )>        (O )> ))       (- )> ...      (o_)> ?!       (^ )> go
+```
+
+`judging` is not a bug. `judging` is the product.
+
+---
+
+## Sticky mode (off by default, because it's weird)
+
+By default Frank lives in your menu bar and only appears when you call him.
+Turn on **sticky mode** and he sits in the corner of your screen, always on
+top, watching you work. Silently.
+
+```
+ .------------------------------------------------------.
+ | $ npm run dev                                        |
+ | > server running on :3000                            |
+ | > everything is fine                                 |
+ |                                                      |
+ |                                              __      |
+ |                                             (o_)>    |
+ |                                           sure, Jan  |
+ '------------------------------------------------------'
+```
+
+You can drag him anywhere. He'll remember. Ducks remember everything.
+
+---
+
+## Frank doesn't want your credit card
+
+You already pay for an AI. Frank borrows its brain, politely and through
+the front door.
+
+| You already have | How Frank uses it |
 | --- | --- |
-| **Claude Code** (Pro, Max or API) | Runs your installed Claude Code in the background. You stay signed in through Claude Code itself, and Frank never sees your credentials. |
-| **GitHub Copilot** (any plan, including Free) | Uses GitHub's official Copilot SDK. You sign in with GitHub, and it counts toward your Copilot allowance. |
+| **Claude Code** (Pro, Max or API) | Runs your installed Claude Code in the background. You stay signed in through Claude Code itself, and Frank never sees your login. He's a duck, not a pickpocket. |
+| **GitHub Copilot** (any plan, including Free) | Uses GitHub's official Copilot SDK. It counts toward your Copilot allowance. |
 | **Cursor** | Runs the Cursor CLI in the background, on your Cursor subscription. |
 | **An API key** | Anthropic, OpenAI or any OpenAI-compatible endpoint. |
-| **Nothing to spare** | A local model through Ollama. Free, and nothing leaves your machine. |
+| **Absolutely nothing** | A local model through Ollama. Free, and nothing leaves your machine. |
 
-On first run, Frank detects which of these you have and asks which one to
-use. Whatever you pick, Frank only reads: he never edits your code or runs
-commands through your agent.
+On first run, Frank checks what you have and asks which one to use.
+Whatever you pick, Frank only reads. He never edits your code and never runs
+commands through your agent. Wings, not hands.
 
-## Where it finds plans
+---
+
+## Where your agents hide their plans (Frank knows)
 
 | Agent | Where Frank looks |
 | --- | --- |
@@ -107,49 +189,108 @@ commands through your agent.
 | Codex CLI | Recent sessions in `~/.codex/sessions/` |
 | Anything else | Your clipboard, a selected file, or text you drop on Frank |
 
-Frank only looks when you summon him. He opens the most recent plan for the
-project you're in, and you can switch to another in one click. More agents
-can be added as small adapters.
+Frank only looks when you call him. He opens the most recent plan for the
+project you're in, and you can switch to another in one click. Want another
+agent supported? It's a small adapter. Send a PR. Frank will judge it
+fairly.
 
-## Principles
+---
 
-- **He only speaks when you call him.** No pop-ups, and no watching your
-  screen.
-- **He listens first,** then keeps things short: a few calls, and one
-  question at a time.
-- **He's frank.** It's in the name. He tells you when the plan's choice is
-  wrong, and when yours is.
-- **You decide.** When you ask, he recommends and explains why.
+## Frank's rules
 
-## How is Frank different from Copilot's Rubber Duck?
+Frank **will**:
+
+- keep it short: a few calls, one question at a time
+- show you receipts from your actual code
+- tell you when the plan is wrong, *and* when you are
+- give you a straight answer when you ask for one
+
+Frank **will never**:
+
+- pop up uninvited (he's a duck, not a paperclip)
+- say *"You're absolutely right!"* unless you are
+- edit your code, run your commands, or open your `.env`
+- phone home, track you, or sell anything to anyone
+
+---
+
+## "Isn't this just Copilot's Rubber Duck?"
+
+No. They sound alike, but they're different animals. One of them is barely
+an animal.
 
 [GitHub Copilot's Rubber Duck](https://docs.github.com/en/copilot/concepts/agents/copilot-cli/rubber-duck)
-reviews your **agent's** work. Frank helps **you** make the calls inside the
-plan.
+is a robot that reviews your robot. **Frank is a duck that helps you, the
+human, make the calls.**
 
 | | Copilot's Rubber Duck | Frank |
 | --- | --- | --- |
 | **Helps** | The agent: a second model reviews the agent's work | You: a duck you talk to when you're overwhelmed |
 | **Runs** | Automatically, at checkpoints in a Copilot session | When you call him, from anywhere |
-| **Gives you** | A list of concerns the agent uses to fix its work | The plan's key decisions, talked through one by one, with a straight recommendation and a note for your agent |
+| **Gives you** | A list of concerns the agent uses to fix its work | The plan's key decisions, talked through one by one, plus a note for your agent |
 | **Scope** | One Copilot session | The plan in front of you, from any agent |
-| **Beyond plans** | Reviewing the agent's work | Any stuck moment, like the bug you've been on for an hour |
+| **Beyond plans** | Reviewing the agent's work | Any stuck moment, including that bug |
 | **Runs on** | Copilot | Your Claude Code, Copilot or Cursor subscription, an API key, or a local model |
 
-They work well together. Rubber Duck makes the agent's plan better, and
-Frank makes sure the calls in it are the ones you'd make.
+They get along fine. Rubber Duck makes the agent's plan better. Frank makes
+sure the calls in it are the ones you'd actually make. Professionally
+cordial.
+
+---
 
 ## Privacy
 
-Everything runs locally. Frank reads plans and repo context only when you
-summon him, shows you what he found before using it, and sends it only to
-the model you chose. With a local model, nothing leaves your machine at all.
+What happens on your machine stays on your machine.
+
+Frank reads your plans and code only when you call him, shows you what he
+found before using it, and sends it only to the model you picked. There's no
+account, no server and no telemetry. Frank doesn't have a cloud. He has a
+pond, and it's on your laptop.
+
+Run a local model and nothing leaves your machine at all.
+
+---
+
+## FAQ
+
+**Why a duck?**
+Rubber duck debugging: explain your problem to a duck, and the answer shows
+up halfway through your sentence. Frank is that duck, except he talks back.
+Sometimes you won't like what he says. That's the point.
+
+**Why "Frank"?**
+Because he's frank. The other names sounded like law firms.
+
+**Will Frank tell me my plan is great?**
+If it is. It usually isn't. Nobody's is. That's why you're here.
+
+**Does Frank write code?**
+No. He has wings, not hands. Your agent writes the code. Frank makes sure
+it's writing the right code.
+
+**Can I make Frank nicer?**
+No.
+
+**Will he pop up in the middle of my work?**
+Never. He only shows up when you call him. (Unless sticky mode is on, in
+which case he's just... there. Watching. You asked for this.)
+
+---
 
 ## Status
 
-🥚 Design stage. The design (requirements, data model, architecture and
-plan) is in [docs/design.md](docs/design.md). Ideas and pushback are welcome.
+```
+     .--.
+    /    \      Frank hasn't hatched yet.
+   |      |     This repo is the design: the full spec is in
+    \    /      docs/design.md. The code comes next.
+     '--'
+```
+
+Ideas, pushback and bug reports for things that don't exist yet are all
+welcome. Frank would want it that way. Frankly.
 
 ## License
 
-Open source; license to be chosen before the first release.
+Open source. The license gets picked before the first release. Frank has
+opinions.
