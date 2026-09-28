@@ -100,6 +100,23 @@ little while, grouped by project. More agents can be added as small adapters.
   the one you like.
 - **You decide.** When you ask, he recommends and explains why.
 
+## How is Frank different from Copilot's Rubber Duck?
+
+[GitHub Copilot's Rubber Duck](https://docs.github.com/en/copilot/concepts/agents/copilot-cli/rubber-duck)
+makes your **agent's** plan better. Frank helps **you** choose between plans.
+
+| | Copilot's Rubber Duck | Frank |
+| --- | --- | --- |
+| **Helps** | The agent: a second model reviews the agent's work | You: a duck you talk to when you're overwhelmed |
+| **Runs** | Automatically, at checkpoints in a Copilot session | When you call him, from anywhere |
+| **Gives you** | A list of concerns the agent uses to fix its work | A side-by-side comparison, one good question, and a straight recommendation |
+| **Scope** | One Copilot session | Plans from Claude Code, Cursor and Codex, side by side |
+| **Beyond plans** | Reviewing the agent's work | Any stuck moment, like the bug you've been on for an hour |
+| **Runs on** | Copilot | Your Claude Code, Copilot or Cursor subscription, an API key, or a local model |
+
+They work well together. Rubber Duck improves each agent's plan, and Frank
+helps you pick between the improved plans.
+
 ## Privacy
 
 Everything runs locally. Frank reads plans and repo context only when you
