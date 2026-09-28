@@ -174,7 +174,7 @@ Everything is local. Nothing is written into the user's repos.
 ### 5.1 Layout
 
 ```
-~/.frank-duck/
+~/.frank/
   config.toml              # model, hotkey, duck position, plan window
   sessions/
     2026-09-28T14-02-11.json   # one file per session (history, M4)
@@ -382,9 +382,8 @@ systems.
 - **Always-on-top etiquette.** The duck must never cover what the user is
   working on. It needs easy hiding, a menu-bar mode, and a position that
   stays put.
-- **Name.** "Frank" is used by a few small agent-tooling projects, so the
-  package, repo and config names use `frank-duck`. It still needs a trademark
-  and package-name check before release.
+- **Name.** A few small agent-tooling projects already use "frank". Before
+  release, check the trademark and package-name availability.
 
 ## 9. How we'll know it works
 
