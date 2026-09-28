@@ -1,532 +1,397 @@
-# Rubber Duck — Design Document
+# Mallard — Design
 
-Engineering design for Rubber Duck: a decision-forcing rubber duck for the agent
-era. Bring-your-own-model, local-first, open source.
+Mallard is a small desktop duck you summon with a hotkey when you're
+overwhelmed. It finds the context you're working in, including the plans your
+coding agents just wrote, talks the problem through with you, and helps you
+choose the best option.
 
-- **Vision & positioning:** [../README.md](../README.md)
-- **This doc:** requirements, data model, high-level design, and the work plan.
+- **Product overview:** [../README.md](../README.md)
+- **This doc:** requirements, data model, architecture and work plan.
 
-Priority tags used throughout: **[MVP]** (Phase 0–1, must exist to prove the
-idea), **[v1]** (first releasable product), **[Later]** (post-v1).
+Priority tags: **[M1]**–**[M4]** refer to the milestones in §7.
 
 ---
 
 ## 1. Overview
 
-Rubber Duck helps a developer **choose** among options they already have, rather
-than generating new ones. It runs a structured conversation — the *protocol* —
-that surfaces hidden constraints and fears, challenges the leading option, and
-forces an explicit, owned commitment, which it records locally and follows up on
-later (the *retro loop*).
+### 1.1 The problem
 
-The model is bring-your-own and swappable; the durable value is the protocol,
-the local decision memory, and the retro loop. A **no-brain** mode (pure
-heuristics, no model) is a first-class configuration, not a fallback.
+Coding agents now produce plans faster than developers can evaluate them. A
+developer often ends up with several plausible approaches from one or more
+agents and no quick way to pick one. Asking yet another chat window means
+copy-pasting plans, re-explaining the repo, and getting a long answer back.
 
-### 1.1 Goals
+### 1.2 The product
 
-- Move a user from "too many options" to one **owned** decision, and make them
-  stop reopening it without cause.
-- Ground the conversation in the user's **actual context** so questions and
-  challenges are specific, not generic.
-- Make each option's **trade-offs explicit** so the user can zero in — without
-  the duck picking for them (except in `verdict` mode).
-- Keep every decision as durable, local, human-readable memory.
-- Close the loop: tell the user whether past calls held up.
-- Work with any model — or none.
+A duck that sits on your screen. Press a hotkey and you can talk or type to
+it. It already has the context: recent agent plans, your repo, optionally your
+clipboard. It asks a question or two, compares the options, and gives you a
+recommendation when you ask. A session takes a minute or two. Then the duck
+gets out of the way.
 
-### 1.2 Non-goals
+### 1.3 Goals
 
-- Generating solutions, writing code, or acting as a general coding assistant.
-- Being a chat companion optimized for engagement. (It optimizes for *ending*.)
-- Cloud sync, accounts, or hosted inference. There is no server.
-- Team collaboration features beyond sharing a `.duck/` directory via git.
+- Summoning the duck is instant: one hotkey, from anywhere.
+- No copy-pasting: the duck finds recent agent plans by itself.
+- The user reaches a clear choice quickly, with the trade-offs made explicit.
+- Honest help: the duck disagrees when a plan is worse.
+- Works with any model the user has, including a local one.
 
----
+### 1.4 Non-goals
 
-## 2. Functional Requirements
-
-### 2.1 Decision session (the protocol)
-
-- **FR-1 [MVP]** The user can start a session and state a decision in natural
-  language.
-- **FR-2 [MVP]** The system elicits at least two concrete options before
-  proceeding to challenge them.
-- **FR-3 [MVP]** The system surfaces the user's constraints, assumptions, and
-  fears via one question at a time.
-- **FR-4 [MVP]** The system **must never propose a new option or a solution.**
-  This is a hard rule enforced by the harness regardless of the brain in use.
-- **FR-5 [MVP]** The system asks exactly one question per turn (no multi-part
-  question dumps).
-- **FR-6 [MVP]** The session is guaranteed to terminate: it converges to a
-  commitment after a bounded number of turns or upon detecting circling.
-- **FR-7 [MVP]** At commitment, the user explicitly names the chosen option, the
-  rationale **in their own words**, and a `reconsider_if` condition.
-- **FR-8 [MVP]** The user confirms the record before it is written; confirmation
-  is part of taking ownership.
-- **FR-9 [MVP]** An **intensity dial** (sounding board → Socratic → devil's
-  advocate → verdict) controls how hard the system pushes.
-- **FR-10 [v1]** In `verdict` mode only, and only when asked, the system may
-  state a recommendation at convergence — never earlier, never unprompted.
-- **FR-11 [v1]** The system detects contradictions (e.g., stated priority vs.
-  leading choice) and reflects them back.
-- **FR-12 [v1]** The user can abandon a session without writing a record; an
-  abandoned session leaves no partial record by default.
-- **FR-13 [v1]** The system maintains a **trade-off ledger** during the session —
-  for each option, the costs/benefits/risks surfaced from the conversation and
-  from context — and can render it explicitly on request and at convergence.
-- **FR-14 [v1]** The trade-off ledger presents costs **without ranking the
-  options**; ranking or a recommendation appears only in `verdict` mode (FR-10).
-  Making trade-offs explicit is never a back door to the duck choosing.
-- **FR-15 [v1]** When context is available, the system's questions and challenges
-  **cite the specific fact** they rest on (e.g., a file, a constraint, a prior
-  decision), rather than staying generic.
-
-### 2.2 Decision records (memory)
-
-- **FR-16 [MVP]** On commitment, the system writes a decision record to the
-  local store.
-- **FR-17 [MVP]** Records are human-readable and editable by hand outside the
-  app.
-- **FR-18 [MVP]** The user can list past decisions and their status.
-- **FR-19 [v1]** The user can open, search, and filter records (by tag, status,
-  date).
-- **FR-20 [v1]** Editing a record by hand never corrupts it; unknown fields are
-  preserved on rewrite.
-
-### 2.3 Retro loop
-
-- **FR-21 [MVP]** The system identifies committed decisions that are due for
-  review and prompts the user to reflect on each.
-- **FR-22 [MVP]** For each reviewed decision the system records the outcome
-  (held up / went wrong / too soon), whether a `reconsider_if` condition fired,
-  and a one-line takeaway.
-- **FR-23 [MVP]** After review, the system updates status: `closed` (held up),
-  `open` (went wrong or a condition fired), or leaves it due-later.
-- **FR-24 [MVP]** Review is time-based (a `review_on` date).
-- **FR-25 [Later]** Review can additionally trigger on a code event (e.g., the
-  next time the user touches files associated with the decision).
-
-### 2.4 Model / brain (BYOM)
-
-- **FR-26 [MVP]** The system runs fully in **no-brain** mode (heuristics only,
-  no model, no network).
-- **FR-27 [v1]** The user can configure a model provider (Anthropic, OpenAI,
-  local Ollama) via config; the same protocol runs behind it.
-- **FR-28 [v1]** Provider credentials are read from config or environment, never
-  hard-coded, never transmitted anywhere except the chosen provider's endpoint.
-- **FR-29 [v1]** The dial's reachable intensity is **clamped by the brain's
-  capability**: a weak brain cannot perform sharp moves (e.g., accusing the user
-  of avoidance).
-- **FR-30 [v1]** If a configured provider is unreachable or errors, the system
-  degrades to no-brain mode for the rest of the session rather than failing.
-
-### 2.5 Interfaces
-
-- **FR-31 [MVP]** A CLI provides: start session, run retro, list decisions.
-- **FR-32 [MVP]** The CLI accepts flags for dial, store location, and review
-  horizon.
-- **FR-33 [v1]** A desktop presence (always-available, global-hotkey-summoned)
-  runs the same protocol/engine as a library.
-- **FR-34 [v1]** The desktop presence shows a **glanceable state** (idle /
-  listening / probing / challenging / committed).
-
-### 2.6 Context (grounding the questions)
-
-Context is **central**, not an add-on: without it the duck asks generic
-questions; with it, it challenges specifics and lays out real trade-offs. The
-guiding principle on exposure:
-
-> **Re-sending context the user already shared with the same model is not new
-> exposure.** The options were usually generated by an agent that already
-> ingested this material. So the baseline carries no privacy cost; the only
-> incremental concerns are a *different* provider and reading *beyond* what the
-> user shared (secrets especially). Those, not the base case, are what we gate.
-
-- **FR-35 [MVP]** The user can bring context into a session by pasting it or
-  naming specific files/paths (the options/plans/diffs/errors they're weighing).
-  This is the baseline and needs no integrations.
-- **FR-36 [v1]** The system reads the files/paths the user explicitly scopes to
-  the session, to ground its questions and trade-offs.
-- **FR-37 [v1]** The system can **automatically gather relevant** repo context
-  (beyond what the user named) via relevance selection and a context budget.
-- **FR-38 [v1]** The system can use the user's **own past decision records** as
-  context (recurring patterns, prior related calls) — the seed of the taste
-  model.
-- **FR-39 [v1]** The system reads *beyond what the user provided* (FR-37) only
-  with a heads-up, and flags when the configured provider **differs** from the
-  one that produced the options (the only case that adds exposure); the user can
-  revoke a source at any time.
-- **FR-40 [v1]** Before sending context to a model provider, the system
-  **redacts obvious secrets** (keys, tokens, `.env` values) — these are the one
-  thing an agent likely never ingested. It also sends only the relevant slice.
-- **FR-41 [v1]** The user can preview **what will be sent** to the provider.
-- **FR-42 [MVP]** Context **never overrides FR-4**: the duck may cite context to
-  question or challenge, but must not use it to propose a new option or solution.
-- **FR-43 [MVP]** In **no-brain mode, no context ever leaves the machine** — it
-  is used only by local heuristics.
-- **FR-44 [Later]** The system can offer to read **on-screen / IDE / terminal**
-  content (a PR view, a doc, a terminal buffer), always asking before consuming
-  it.
+- Writing or editing code. The duck helps you choose; your agent does the
+  work.
+- Watching your screen or speaking up unprompted.
+- Accounts, cloud sync or telemetry.
+- Replacing your coding agent's chat.
 
 ---
 
-## 3. Non-Functional Requirements
-
-- **NFR-1 Local-first & private [MVP].** All state lives on the user's disk.
-  No account, no telemetry, no network calls except to the user's chosen model
-  provider. No-brain mode makes zero network calls.
-- **NFR-2 BYOM / provider-agnostic [MVP].** No provider is privileged in the
-  core; adding a provider is implementing one interface. The core never depends
-  on a specific model.
-- **NFR-3 Graceful degradation [MVP].** Capability scales down cleanly: sharp →
-  basic → passive. The product is useful at every level, including no model.
-- **NFR-4 Responsiveness [v1].** No-brain turns are effectively instant;
-  model-backed turns stream and show a thinking state; a turn never blocks the
-  UI thread.
-- **NFR-5 Durability & forward-compat [MVP].** Records are plain text, survive
-  app removal, are diffable in git, and round-trip through hand edits without
-  loss (unknown fields preserved).
-- **NFR-6 Portability [v1].** Core engine is OS-independent; the CLI runs
-  anywhere Node runs; the desktop shell targets macOS/Windows/Linux.
-- **NFR-7 Security [v1].** Credentials are never written to records or logs;
-  config files holding secrets are created with restrictive permissions;
-  secrets can be sourced from env or an OS keychain.
-- **NFR-8 Extensibility [MVP].** Brain, provider, store, and presentation are
-  separable behind interfaces so contributors can add any one without touching
-  the others.
-- **NFR-9 Testability [MVP].** The protocol is deterministic in no-brain mode
-  and can be driven end-to-end headlessly (piped I/O) for automated tests.
-- **NFR-10 Small surface [v1].** Minimal dependencies; the CLI ships with none.
-  Favor readable, auditable code — this is an OSS trust product.
-- **NFR-11 Accessibility [v1].** Desktop UI is keyboard-first and screen-reader
-  friendly; the duck's state is conveyed by more than color.
-- **NFR-12 Licensing [v1].** OSI-approved open-source license; contributions
-  under a clear CLA/DCO.
-- **NFR-13 Context transparency & minimization [v1].** Baseline: re-sending
-  material the user already shared with the same model adds no exposure. The
-  incremental cases are gated — reading beyond what the user provided, or a
-  provider different from the one that generated the options. Secrets are redacted
-  before sending; only the relevant slice is sent; the user can preview it;
-  no-brain mode sends nothing.
-
----
-
-## 4. Data Model
-
-### 4.1 On-disk layout
+## 2. User flow
 
 ```
-.duck/
-  config.toml               # provider, dial default, review horizon
-  decisions/
-    2026-09-27-<slug>.md     # one file per decision
+ ⌥ Space ──▶ duck panel opens ──▶ context found ──▶ talk it through ──▶ choice
+   (hold to talk,       (plans from the last ~30 min,  (question, comparison,  (copied, ready
+    or type)             repo, clipboard; confirm)       recommendation)         for your agent)
 ```
 
-Location resolution order: `--dir` flag → nearest ancestor containing `.duck/`
-→ current directory. In-repo by default (shareable/diffable with the team),
-gitignore-able for privacy.
+1. **Summon.** A hotkey or a click on the duck opens a small panel next to
+   it. Holding the hotkey records voice; releasing it sends. Typing works too.
+2. **Context.** The duck lists what it found, such as "2 plans from Claude
+   Code and Cursor in `rubber-duck/`", and the user confirms, deselects items,
+   or adds more (a file, the clipboard).
+3. **Talk.** The duck responds briefly. Usually it asks one clarifying
+   question, then shows a side-by-side comparison.
+4. **Choose.** The user asks "which would you pick?" or picks one. The duck
+   gives a short recommendation with reasons and names what would change it.
+5. **Done.** The chosen plan and a one-line summary are copied to the
+   clipboard. The panel closes, and the duck returns to idle.
 
-### 4.2 Decision record
+The duck also works without plans. "I've been stuck on this bug for an hour"
+is a valid session. Context is then the repo and whatever the user adds.
 
-Format: Markdown with a YAML frontmatter header. The frontmatter is structured
-data; the body holds prose the user owns.
+---
 
-| Field | Type | Notes |
+## 3. Functional requirements
+
+### 3.1 The duck
+
+- **FR-1 [M1]** A small duck sits in a corner of the screen. It is always on
+  top, draggable, and remembers its position.
+- **FR-2 [M1]** A global hotkey (default `⌥ Space`, configurable) opens and
+  closes the panel from any app.
+- **FR-3 [M1]** The duck shows its state at a glance: idle, listening,
+  thinking, done.
+- **FR-4 [M1]** The duck can be hidden, and it can live in the menu bar or
+  system tray instead of on screen.
+
+### 3.2 Input
+
+- **FR-5 [M1]** Type into the panel.
+- **FR-6 [M3]** Push-to-talk. Holding the hotkey records, releasing it
+  transcribes on-device and sends.
+- **FR-7 [M1]** Drop files or text onto the duck to add them as context.
+
+### 3.3 Context
+
+- **FR-8 [M2]** **Plan finder.** On summon, the duck gathers plans written by
+  supported coding agents in a recent window (default 30 minutes), grouped by
+  project.
+- **FR-9 [M2]** Supported sources at launch:
+  - Claude Code plan files in `~/.claude/plans/` (or the `plansDirectory`
+    setting) and recent sessions.
+  - Cursor plan files in `~/.cursor/plans/` and plans saved in the workspace.
+  - Codex CLI sessions in `~/.codex/sessions/`.
+- **FR-10 [M2]** Repo context: detects the current project (see §5.4) and
+  includes the branch, changed files, and relevant rules files (`AGENTS.md`,
+  `CLAUDE.md`).
+- **FR-11 [M1]** Clipboard context is used only when the user includes it.
+- **FR-12 [M1]** Before using any context, the duck shows what it found and
+  lets the user deselect items.
+- **FR-13 [M2]** Near-duplicate plans are merged, and each plan is labelled by
+  its source agent and age.
+
+### 3.4 Conversation
+
+- **FR-14 [M1]** The duck listens first and keeps replies short. It asks at
+  most one question per turn.
+- **FR-15 [M1]** When there are two or more options, it can show a
+  side-by-side comparison of the few dimensions that matter (such as undo
+  cost, effort, risk, and fit with the current setup).
+- **FR-16 [M1]** On request ("which would you pick?"), it gives a clear
+  recommendation, the reasons, and what would change its answer.
+- **FR-17 [M1]** It is honest. It does not flatter, and it says when a plan
+  is weaker, including the one the user prefers.
+- **FR-18 [M1]** Replies stream, so the first words appear quickly.
+
+### 3.5 Finishing
+
+- **FR-19 [M1]** "Done" copies the chosen plan and a one-line summary of the
+  choice to the clipboard.
+- **FR-20 [M4]** Optionally hand the choice straight back to the agent, for
+  example by writing the chosen plan where the agent will pick it up.
+- **FR-21 [M4]** Optional history: past sessions are listed with their
+  choices and can be reopened.
+
+### 3.6 Models
+
+- **FR-22 [M1]** Bring your own model: Anthropic, OpenAI, any
+  OpenAI-compatible endpoint, or a local model through Ollama.
+- **FR-23 [M1]** First run auto-detects `ANTHROPIC_API_KEY` or
+  `OPENAI_API_KEY` in the environment and any running Ollama, then asks the
+  user to confirm one.
+- **FR-24 [M1]** If the model is unreachable, the duck says so plainly and
+  keeps the user's input so they can retry.
+
+---
+
+## 4. Non-functional requirements
+
+- **NFR-1 Fast.** The panel appears within 150 ms of the hotkey, and the
+  first streamed words appear within about 1.5 s on a hosted model.
+- **NFR-2 Light.** Idle memory stays small (target under 100 MB) with near-zero
+  CPU. The duck must never be something people quit to save battery.
+- **NFR-3 Private.** No telemetry and no network calls except to the chosen
+  model provider. Context is read only on summon.
+- **NFR-4 Secrets.** API keys are stored in the OS keychain, never in plain
+  config files or logs. Common secret patterns are stripped from context
+  before it is sent.
+- **NFR-5 Cross-platform.** macOS first, then Windows and Linux.
+- **NFR-6 Accessible.** Fully keyboard-driven. State is not conveyed by colour
+  alone.
+- **NFR-7 Resilient to agent changes.** Plan-finder adapters are isolated, so
+  a format change in one agent breaks only that adapter, and the duck still
+  works with the others.
+- **NFR-8 Small and auditable.** Few dependencies and readable code, because
+  this is a tool people trust with their context.
+
+---
+
+## 5. Data model
+
+Everything is local. Nothing is written into the user's repos.
+
+### 5.1 Layout
+
+```
+~/.mallard/
+  config.toml              # model, hotkey, duck position, plan window
+  sessions/
+    2026-09-28T14-02-11.json   # one file per session (history, M4)
+```
+
+API keys live in the OS keychain, referenced by name from `config.toml`.
+
+### 5.2 Config (`config.toml`)
+
+| Key | Default | Notes |
 | --- | --- | --- |
-| `id` | string | `YYYY-MM-DD-<slug>`, unique within the store, stable. |
-| `created` | ISO-8601 datetime | Set once at commit. |
-| `status` | enum | `open` → `committed` → (`reopened`→`committed`)\* → `closed`. |
-| `decision` | string | The chosen option, in short form. |
-| `options_considered` | string[] | The real options weighed (≥1). |
-| `reconsider_if` | string[] | User-authored conditions to legitimately reopen. |
-| `review_on` | ISO date | When the retro fires. |
-| `review_trigger` | enum | `time` \| `manual` \| `file-change` (Later). |
-| `dial_used` | enum | Intensity the session ran at. |
-| `model_used` | string | Provider/model, or `none (no-brain heuristic)`. |
-| `context_used` | string[] | Provenance only — descriptors of sources consulted (e.g. `file:src/rate_limit.ts`, `decision:2026-08-01-cache`), **never the content**. |
-| `tags` | string[] | Optional, for filtering. |
+| `model.provider` | detected | `anthropic` \| `openai` \| `openai-compatible` \| `ollama` |
+| `model.name` | detected | Provider model ID |
+| `model.base_url` | none | For OpenAI-compatible or Ollama |
+| `hotkey` | `Alt+Space` | Global shortcut |
+| `plans.window_minutes` | `30` | How far back the plan finder looks |
+| `plans.sources` | all | Enabled adapters |
+| `duck.position` | bottom-right | Last dragged position |
+| `duck.mode` | `screen` | `screen` or `menubar` |
 
-Body sections:
-- `## Why (your words, captured at commit)` — verbatim user rationale.
-- `## Trade-offs` — the ledger: per option, the costs/benefits/risks surfaced,
-  attributed to the user or to a cited context fact. Unranked (FR-14).
-- `## Retro log` — append-only entries: date, outcome, whether a condition
-  fired, one-line takeaway.
-
-**Invariants**
-- `decision` is one of `options_considered` when a match exists; otherwise the
-  user's free-text choice.
-- `why` is verbatim user text, never a model paraphrase (ownership requirement).
-- `reconsider_if` originates from the user, never invented by the system.
-- `context_used` stores source *descriptors*, never their content — records stay
-  shareable without leaking what was read (NFR-1/NFR-13).
-- The `## Trade-offs` ledger records costs, not a verdict; any recommendation is
-  confined to `## Why` when the user took one in `verdict` mode.
-- Rewrites preserve unknown frontmatter fields and the full body (FR-20/NFR-5).
-
-### 4.3 Status state machine
-
-```
-        commit                 retro: went wrong / condition fired
- open ─────────────▶ committed ───────────────────────────────▶ open
-   ▲                    │  │                                       │
-   │ (new session)      │  │ retro: held up                       │
-   │                    │  └──────────────────────────▶ closed    │
-   └──────────────── reopened ◀───────────────────────────────────┘
-```
-
-### 4.4 Config (`config.toml`)
-
-| Key | Type | Default | Notes |
-| --- | --- | --- | --- |
-| `provider` | string | `none` | `none` \| `anthropic` \| `openai` \| `ollama`. |
-| `model` | string | — | Provider-specific model id. |
-| `api_key_env` | string | — | Name of env var holding the key (never the key). |
-| `dial` | enum | `socratic` | Default intensity. |
-| `review_days` | int | `14` | Default retro horizon. |
-| `store` | string | `./.duck` | Store location override. |
-
-### 4.5 Versioning
-
-A `schema` field (added at v1) allows migrations. Until then, additive changes
-only; readers ignore unknown fields.
-
----
-
-## 5. High-Level Design
-
-### 5.1 Components
-
-```
-                    ┌──────────────────────────────┐
-                    │        Presentation          │
-                    │  CLI  •  Desktop shell (v1)   │
-                    └───────────────┬──────────────┘
-                                    │ IO (ask/say/state)
-                    ┌───────────────▼──────────────┐
-                    │          Conductor           │  the moat
-                    │  state machine + HARD RULES  │
-                    └───┬───────────┬───────────┬──┘
-                        │           │           │
-          ┌─────────────▼──┐  ┌─────▼─────┐  ┌──▼──────────────┐
-          │     Brain      │  │   Store   │  │    Context      │
-          │ heuristic|model│  │  .duck/   │  │  providers +    │
-          └───────┬────────┘  └───────────┘  │ consent/redact/ │
-                  │ (model brain only)        │   minimize      │
-          ┌───────▼────────┐                  └──┬──────────────┘
-          │    Provider    │  anthropic|openai|  │ paste·file·repo·
-          └────────────────┘        ollama       │ history·screen(Later)
-                              ┌───────────┐
-                    Retro ────┤   Store   │  reopen due decisions, log outcomes
-                              └───────────┘
-```
-
-- **Presentation** renders questions and captures answers; knows nothing about
-  protocol logic. CLI today; desktop shell reuses the same engine as a library.
-- **Conductor** owns the state machine and enforces the hard rules (FR-4/5/6/8).
-  It asks the Brain *what move to make next*, but the Brain cannot override the
-  rules — this separation is the core architectural bet.
-- **Brain** decides the next move (message + signals). Two implementations share
-  one interface: `HeuristicBrain` (no model) and `ModelBrain` (wraps a Provider).
-- **Provider** is the thin, boring model call: messages in, structured output
-  out. One per vendor.
-- **Store** reads/writes decision records; the single source of truth on disk.
-- **Retro** scans the Store for due decisions and runs the follow-up.
-- **Context** supplies grounding to the Conductor through pluggable **providers**
-  (paste, file/repo, decision-history, screen/IDE later). A consent → select →
-  redact pipeline sits in front of every provider: sources are opt-in, only the
-  minimal relevant slice is selected, secrets are redacted, and the user sees
-  what will be sent before it goes to a Provider. In no-brain mode context is
-  used only by local heuristics and never leaves the machine.
-
-The Conductor also maintains a **trade-off ledger** across the session — per
-option, the costs/benefits/risks surfaced from the conversation and cited
-context — which it renders at convergence and writes into the record (FR-13/14).
-
-### 5.2 The conductor state machine
-
-`Articulate → Surface → Probe → Challenge → Converge → Commit → Closed`
-
-Each turn the Conductor: (1) collects the user's last answer, (2) asks the Brain
-for the next move given the conversation, sensed signals, and the dial ceiling,
-(3) applies hard rules, (4) renders one question or transitions state. Transition
-triggers: enough options surfaced (Surface→Probe), signals exhausted within the
-ceiling (Probe/Challenge→Converge), circling or turn cap (→Converge, forced),
-choice named (Converge→Commit), record confirmed (Commit→Closed).
-
-### 5.3 The Brain interface (BYOM seam)
+### 5.3 In-memory types
 
 ```ts
-type Move = {
-  state: 'articulate'|'surface'|'probe'|'challenge'|'converge'|'commit';
-  question: string;               // exactly one question; never proposes an option
-  cites?: string[];               // context descriptors this question rests on (FR-15)
-  ledgerDelta?: TradeoffEntry[];  // costs/benefits surfaced this turn (FR-13)
-  signals: {
-    optionsSeen: string[];
-    contradiction?: string;
-    avoidanceDetected: boolean;
-    circling: boolean;
-    readyToCommit: boolean;
-  };
+type Plan = {
+  source: 'claude-code' | 'cursor' | 'codex' | 'file' | 'clipboard';
+  title: string;          // first heading or first line
+  body: string;           // plan text (Markdown)
+  project?: string;       // absolute path of the repo it belongs to, if known
+  modifiedAt: Date;
+  origin: string;         // file path it was read from
 };
 
-interface Brain {
-  capability(): 'passive'|'basic'|'sharp';  // clamps the dial ceiling (FR-29)
-  nextMove(ctx: {
-    topic: string; options: string[]; history: Turn[];
-    context: ContextSnippet[];    // already consented, selected, redacted
-    ledger: TradeoffEntry[];      // the running trade-off ledger
-    dialCeiling: number; usedMoves: Set<string>;
-  }): Promise<Move>;
-}
+type Session = {
+  startedAt: Date;
+  context: { plans: Plan[]; repo?: RepoInfo; extras: string[] };
+  messages: { role: 'user' | 'duck'; text: string }[];
+  choice?: { plan?: Plan; summary: string };
+};
+```
 
-// Context is gathered and sanitized OUTSIDE the Brain, so the Brain only ever
-// sees material the user has consented to and that has been minimized/redacted.
-interface ContextProvider {
-  id(): string;                               // e.g. 'file', 'repo', 'history'
-  available(): boolean;
-  // Returns candidate snippets relevant to the query; the pipeline then applies
-  // consent, relevance selection, and secret redaction before the Brain sees them.
-  gather(query: { topic: string; options: string[] }): Promise<ContextSnippet[]>;
-}
+### 5.4 Project detection
 
-interface Provider {                          // used only by ModelBrain
-  complete(messages: Message[], opts): Promise<StructuredResponse>;
+Plans are grouped by the project they belong to:
+
+- **Codex sessions** record the working directory.
+- **Claude Code sessions** are stored per project.
+- **Plan files** are matched by the file paths they mention.
+
+The "current project" is the one with the most recent activity. The user can
+switch it in one click. Frontmost-app detection (the active terminal or
+editor) is a later refinement.
+
+---
+
+## 6. High-level design
+
+### 6.1 Components
+
+```
+┌────────────────────────────── Tauri app ──────────────────────────────┐
+│  UI (TypeScript/React, webview)                                        │
+│   duck window · panel · comparison view · settings                     │
+│   conversation engine · prompt builder · provider layer (AI SDK)       │
+│        │  fetch via Tauri HTTP plugin          ▲ events                │
+├────────┼────────────────────────────────────────┼──────────────────────┤
+│  Core (Rust)                                    │                      │
+│   global hotkey · window (always-on-top) · plan finder adapters        │
+│   repo reader (git) · clipboard · keychain · local STT (whisper.cpp)   │
+└────────────────────────────────────────────────────────────────────────┘
+          │                                   │
+   ~/.claude/plans, ~/.cursor/plans,     model provider
+   ~/.codex/sessions, current repo       (API or local Ollama)
+```
+
+- **Tauri 2** keeps the app small and native. It provides always-on-top
+  transparent windows, a global-shortcut plugin, and an HTTP plugin that
+  lets the UI call model APIs without browser CORS limits.
+- **Rust core** handles OS-level work: the hotkey, window behaviour, reading
+  agent files, git, keychain, and on-device speech-to-text.
+- **TypeScript UI** holds the conversation engine and the provider layer.
+  The Vercel AI SDK, given the Tauri fetch, covers Anthropic, OpenAI,
+  OpenAI-compatible endpoints and Ollama behind one interface, with
+  streaming.
+
+### 6.2 Plan finder
+
+Each agent has a small adapter:
+
+```ts
+interface PlanSource {
+  id: string;                               // 'claude-code', 'cursor', 'codex'
+  available(): Promise<boolean>;            // is the agent installed / dir present?
+  recent(since: Date): Promise<Plan[]>;     // plans modified after `since`
 }
 ```
 
-Hard rules live in the Conductor and are applied to every `Move`: strip/re-ask
-if the question proposes an option; cap length to one question; force
-`converge`/`commit` on circling or the turn cap; refuse states above the
-capability-clamped dial ceiling.
+- **Claude Code:** read `*.md` in the plans directory (the default
+  `~/.claude/plans/`, or `plansDirectory` from user or project settings).
+  Also scan recent session transcripts for a plan the user hasn't saved.
+- **Cursor:** read `~/.cursor/plans/*.plan.md` and any `*.plan.md` in the
+  current workspace.
+- **Codex:** read recent `rollout-*.jsonl` files under
+  `~/.codex/sessions/YYYY/MM/DD/`. Extract the latest proposed plan (the
+  plan-tool output, or the last long assistant message) and the session's
+  working directory.
 
-### 5.4 Capability clamping
+The finder runs only when the duck is summoned. Its steps:
 
-Effective ceiling = `min(dialCeiling, capabilityCeiling)`. `passive` reaches
-Surface, `basic` reaches Probe, `sharp` reaches Challenge/Converge-with-verdict.
-No-brain = `basic`. This prevents a weak model from performing sharp,
-high-confidence moves it can't justify (NFR-3).
+1. Ask each adapter for items newer than the window.
+2. Group the results by project.
+3. Merge near-duplicates.
+4. Sort by recency.
 
-### 5.5 Key flows
+Adapters are read-only and fail independently. If one agent changes its
+format, the other adapters keep working.
 
-**Session:** start → Articulate → Surface options → Probe/Challenge (bounded,
-each move may gather+cite context and update the trade-off ledger) → Converge
-(render the ledger) → Commit (capture choice + why + reconsider_if, confirm) →
-write record (incl. `## Trade-offs` and `context_used`) → Close.
+### 6.3 Conversation engine
 
-**Context gathering (per move):** Brain requests grounding for the current
-options → each opted-in ContextProvider returns candidates → pipeline selects
-the minimal relevant slice and redacts secrets → (model brain) the user sees
-what will be sent → snippets handed to the Brain. No opted-in providers, or
-no-brain mode, ⇒ nothing gathered, nothing sent.
+- **Prompt.** A short system prompt defines the duck's behaviour: listen
+  first; keep replies to a few sentences; ask at most one question; compare
+  options on the dimensions that matter; be honest and never flatter; give a
+  clear recommendation when asked, with reasons and what would change it.
+  The confirmed context (plans, repo summary, extras) is included as labelled
+  blocks.
+- **Context budget.** Plans are trimmed to fit the model's context window.
+  Headings and steps are kept before details. Repo context is a compact
+  summary (branch, changed file list, rules files), not file contents, unless
+  the user adds a file.
+- **Comparison view.** When there are two or more plans, the engine asks the
+  model for a small comparison table (options × 3–4 dimensions). The panel
+  renders it; plain text is the fallback.
+- **Streaming** everywhere. Sessions are held in memory, and history is saved
+  from M4.
 
-**Retro:** scan store for `status==committed && review_on<=today` → for each,
-prompt outcome + condition-fired + takeaway → append to Retro log → update
-status.
+### 6.4 Voice
 
-**Degradation:** ModelBrain provider error → log once → swap to HeuristicBrain
-for the remainder of the session; the record notes the effective `model_used`.
+Push-to-talk only: hold the hotkey to record, release to transcribe. Speech
+is transcribed on-device with whisper.cpp, or Apple's speech framework on
+macOS, then sent as a normal message. There is no always-on microphone and no
+spoken replies in the first versions.
 
----
+### 6.5 Privacy and security
 
-## 6. Work Plan
-
-### Phase 0 — Prove the machinery *(no keys needed)*
-No-brain CLI: conductor state machine, hard rules, `.duck/` records, retro loop;
-headless end-to-end test asserting the guarantees. **Exit:** a full session
-commits an owned record and the retro reopens/logs/closes it, with no model.
-
-### Phase 1 — Prove felt ownership *(no keys needed)*
-Wizard-of-Oz sessions (a human plays the brain) against real decisions.
-**Deliverables:** a lightweight session-capture script; 8–10 logged sessions;
-findings written back into the conductor's question set and the Phase 2 prompt.
-**Exit:** most sessions end with the user reporting the decision as *theirs*, and
-describing the experience as being helped to think, not answered (success
-metrics in §8). If not, iterate the protocol before Phase 2.
-
-### Phase 2 — Add a real brain (BYOM) + grounded questions
-`Brain`/`Provider` interfaces; `ModelBrain` + `HeuristicBrain`; adapters for
-Anthropic, OpenAI, Ollama; structured-output handling; capability clamping;
-degradation path. Plus the **baseline context path** — since context is central:
-pasted/named context (FR-35), reading the files/paths the user scopes (FR-36),
-secret redaction (FR-40), the trade-off ledger (FR-13/14), and cited questions
-(FR-15). **Deliverables:** config (`config.toml` + env keys), provider adapters,
-the redact/minimize step, contract tests using a mock provider (no live keys in
-CI). **Exit:** the same protocol runs behind a real model; questions cite the
-context they rest on and are measurably sharper than heuristic ones in a blind
-comparison; no live key required to run tests.
-
-### Phase 3 — Deeper context (auto-gather, history, preview)
-Automatic relevance-gathering beyond what the user named (FR-37) with a context
-budget; the user's own past decisions as context (FR-38); the beyond-scope /
-different-provider heads-up (FR-39) and send-preview (FR-41). **Exit:** the duck
-challenges an option using a specific, cited fact it surfaced from the codebase
-or history, with the user in control of what was read and sent.
-
-### Phase 4 — Records & retro, hardened
-Search/filter/list (FR-19), hand-edit safety (FR-20/NFR-5), tags, richer retro
-outcomes, config for review horizon and store location. **Exit:** records
-round-trip through hand edits without loss; retro handles a store of many
-decisions.
-
-### Phase 5 — The sticky duck (desktop)
-Desktop shell reusing the engine as a library; global hotkey; glanceable states;
-get-out-of-the-way UX. Tech choice (e.g., Tauri) decided here, not before.
-**Exit:** summon-from-anywhere, run a full session, and the duck recedes on
-commit.
-
-### Phase 6 — Ambient context & polish
-Opt-in on-screen / IDE / terminal context readers (FR-44, always ask first);
-accessibility; packaging and distribution; docs and contribution guides.
-**Exit:** first releasable v1.
-
-### Cross-cutting (from Phase 2 on)
-CLA/DCO + license (NFR-12), `CONTRIBUTING.md`, CI (lint + headless protocol
-tests + mock-provider contract tests), semantic-ish versioning of the record
-schema.
+- Files are read only on summon, and only from the known agent directories,
+  the current repo, and anything the user adds.
+- The user sees and confirms the context before it's sent.
+- Context goes only to the configured provider. Ollama keeps everything
+  local.
+- Common secret patterns (API keys, tokens, `.env` values) are stripped
+  before sending. This is best-effort and is documented as such.
+- Keys are stored in the keychain. The duck has no telemetry.
 
 ---
 
-## 7. Risks & Open Questions
+## 7. Work plan
 
-- **R-1 The protocol doesn't create felt ownership.** Mitigation: Phase 1 gates
-  Phase 2; this is the make-or-break and is tested before more is built.
-- **R-2 BYOM variance.** Weak models produce weak or wrong sharp moves.
-  Mitigation: capability clamping (FR-29), no-brain floor.
-- **R-3 Structured output isn't uniform across providers.** Open question:
-  JSON/tool-calling vs. a parseable text convention. Affects the Provider
-  contract; decide in Phase 2.
-- **R-4 "Calling bullshit" feels hostile or is wrong.** Mitigation: it must cite
-  the observation; gated behind the `devil`/`verdict` dial and `sharp`
-  capability.
-- **R-5 Record location trade-off.** In-repo (shareable) vs `$HOME` (private).
-  Decision: default in-repo, gitignore-able, `store` override.
-- **R-6 Scope creep toward general life decisions.** Decision: dev-first wedge;
-  the engine generalizes later but positioning stays focused.
-- **R-7 Incremental context exposure.** Re-sending what the user already shared
-  with the same model is not new exposure; the real cases are reading *beyond*
-  what they provided and a *different* provider than generated the options.
-  Mitigation: heads-up + different-provider flag (FR-39), redaction of secrets an
-  agent never saw (FR-40), send-preview (FR-41), nothing in no-brain mode (FR-43).
-- **R-8 Context turns the duck into an expander.** Richer context tempts the duck
-  to start proposing solutions. Mitigation: FR-42 — context may only inform
-  questions/challenges/trade-offs; FR-4 remains a hard rule.
-- **R-9 Context bloat / cost.** Sending too much inflates latency and token cost.
-  Mitigation: relevance selection + a per-turn context budget (Phase 3).
-- **R-10 Garbage-in.** Wrong or stale context yields confidently wrong challenges.
-  Mitigation: cite the source (FR-15) so the user can catch and correct it; the
-  user can revoke a source mid-session (FR-39).
+### M1 — The duck you can talk to
 
-## 8. Success Metrics
+A Tauri app with the duck window, global hotkey, panel and typed
+conversation. It includes model setup with auto-detection, context from the
+clipboard and dropped files, the comparison view, recommendation on request,
+and copy-on-done. macOS first.
 
-- **Primary:** share of sessions the user reports as *their* decision; share
-  described as "helped me think" vs "gave me an answer."
-- **Loop:** share of committed decisions that reach a retro; retros producing a
-  genuine "I was right/wrong about that" takeaway.
-- **Health:** sessions that reach commitment; median turns to commit; reopen
-  rate *before* a `reconsider_if` fires (want low — the record is doing its job).
-- **Grounding (v1+):** share of challenges that cite a specific fact rather than
-  staying generic; whether users rate the `## Trade-offs` ledger as helpful for
-  zeroing in.
+**Exit:** summon the duck anywhere, paste two plans, and get a clear
+comparison and recommendation in under a minute.
+
+### M2 — It finds the plans
+
+Plan-finder adapters for Claude Code, Cursor and Codex, plus project
+grouping, repo context, and a "found N plans, use these?" confirmation.
+
+**Exit:** after an agent writes a plan, summoning the duck shows that plan
+with no copy-pasting.
+
+### M3 — Talk to it
+
+Push-to-talk with on-device transcription.
+
+**Exit:** hold the hotkey, say "help me pick between these," and the session
+starts with the found plans.
+
+### M4 — Close the loop
+
+Optional session history. Hand the chosen plan back to the agent. Windows
+and Linux builds. More adapters (for example Copilot CLI, Gemini CLI and
+Cline) contributed as small adapter modules.
+
+**Exit:** a public release that installs in one step on all three operating
+systems.
+
+---
+
+## 8. Risks and open questions
+
+- **Agent file formats change.** Plan locations and transcript formats aren't
+  public APIs. Mitigation: isolated adapters, fixture tests per agent
+  version, and graceful skipping.
+- **Claude Code deletes old data.** Its cleanup (default 30 days) removes old
+  plan files. That's fine for recent plans, but it means the duck can't rely
+  on agent directories for history.
+- **Picking the right project.** Recency is a good guess but won't always be
+  right. The one-click project switcher is the fallback.
+- **Model quality varies.** Small local models may compare plans poorly. The
+  docs will recommend models, and the settings screen will note weaker ones.
+- **Always-on-top etiquette.** The duck must never cover what the user is
+  working on. It needs easy hiding, a menu-bar mode, and a position that
+  stays put.
+- **Name.** "Mallard" still needs a trademark and package-name check before
+  release.
+
+## 9. How we'll know it works
+
+- **Time to choice:** median time from summon to "done" (target: under 2
+  minutes).
+- **No-paste rate:** share of sessions where the plans came from the plan
+  finder rather than pasting.
+- **Coming back:** people still summoning the duck after 4 weeks.
+- **Honesty check:** a small set of scripted sessions run per model, checking
+  that the duck stays brief, asks at most one question per turn, and doesn't
+  just agree with the user's preferred option.
