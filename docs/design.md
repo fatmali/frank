@@ -1,9 +1,9 @@
 # Frank — Design
 
 Frank is a small desktop duck you summon with a hotkey when you're
-overwhelmed. It finds the context you're working in, including the plans your
+overwhelmed. He finds the context you're working in, including the plans your
 coding agents just wrote, talks the problem through with you, and helps you
-choose the best option.
+choose the best option. He runs on the AI subscription you already have.
 
 - **Product overview:** [../README.md](../README.md)
 - **This doc:** requirements, data model, architecture and work plan.
@@ -23,24 +23,25 @@ copy-pasting plans, re-explaining the repo, and getting a long answer back.
 
 ### 1.2 The product
 
-A duck that sits on your screen. Press a hotkey and you can talk or type to
-it. It already has the context: recent agent plans, your repo, optionally your
-clipboard. It asks a question or two, compares the options, and gives you a
-recommendation when you ask. A session takes a minute or two. Then the duck
-gets out of the way.
+A duck that lives in your menu bar or, in sticky mode, on your screen. Press a
+hotkey, then talk or type. He already has the context: recent agent plans,
+your repo, and your clipboard if you add it. He asks a question or two,
+compares the options, and gives you a recommendation when you ask. His brain
+is whichever AI you already pay for: Claude Code, GitHub Copilot, Cursor, an
+API key, or a local model. A session takes a minute or two, then Frank gets
+out of the way.
 
 ### 1.3 Goals
 
-- Summoning the duck is instant: one hotkey, from anywhere.
-- No copy-pasting: the duck finds recent agent plans by itself.
-- The user reaches a clear choice quickly, with the trade-offs made explicit.
-- Honest help: the duck disagrees when a plan is worse.
-- Works with any model the user has, including a local one.
+- Summoning Frank is instant: one hotkey, from anywhere.
+- No copy-pasting: Frank finds recent agent plans himself.
+- No new bill: he runs on the subscription the developer already has.
+- The user reaches a clear choice quickly, with trade-offs made explicit.
+- Honest help: Frank disagrees when a plan is worse.
 
 ### 1.4 Non-goals
 
-- Writing or editing code. The duck helps you choose; your agent does the
-  work.
+- Writing or editing code. Frank helps you choose; your agent does the work.
 - Watching your screen or speaking up unprompted.
 - Accounts, cloud sync or telemetry.
 - Replacing your coding agent's chat.
@@ -50,77 +51,82 @@ gets out of the way.
 ## 2. User flow
 
 ```
- ⌥ Space ──▶ duck panel opens ──▶ context found ──▶ talk it through ──▶ choice
+ ⌥ Space ──▶ panel opens ──▶ context found ──▶ talk it through ──▶ choice
    (hold to talk,       (plans from the last ~30 min,  (question, comparison,  (copied, ready
     or type)             repo, clipboard; confirm)       recommendation)         for your agent)
 ```
 
-1. **Summon.** A hotkey or a click on the duck opens a small panel next to
-   it. Holding the hotkey records voice; releasing it sends. Typing works too.
-2. **Context.** The duck lists what it found, such as "2 plans from Claude
-   Code and Cursor in `rubber-duck/`", and the user confirms, deselects items,
-   or adds more (a file, the clipboard).
-3. **Talk.** The duck responds briefly. Usually it asks one clarifying
-   question, then shows a side-by-side comparison.
-4. **Choose.** The user asks "which would you pick?" or picks one. The duck
-   gives a short recommendation with reasons and names what would change it.
+1. **Summon.** A hotkey or a click on Frank opens a small panel: under the
+   menu bar icon by default, or next to Frank in sticky mode. Holding the
+   hotkey records voice, and releasing sends. Typing works too.
+2. **Context.** Frank lists what he found, such as "2 plans from Claude Code
+   and Cursor in `my-app/`". The user confirms, deselects items, or adds more
+   (a file, the clipboard).
+3. **Talk.** Frank replies briefly. Usually he asks one clarifying question,
+   then shows a side-by-side comparison.
+4. **Choose.** The user asks "which would you pick?" or picks one. Frank gives
+   a short recommendation with reasons and says what would change his answer.
 5. **Done.** The chosen plan and a one-line summary are copied to the
-   clipboard. The panel closes, and the duck returns to idle.
+   clipboard. The panel closes.
 
-The duck also works without plans. "I've been stuck on this bug for an hour"
-is a valid session. Context is then the repo and whatever the user adds.
+Frank also works without plans. "I've been stuck on this bug for an hour" is
+a valid session, with the repo and whatever the user adds as context.
 
 ---
 
 ## 3. Functional requirements
 
-### 3.1 The duck
+### 3.1 Frank on screen
 
-- **FR-1 [M1]** A small duck sits in a corner of the screen. It is always on
-  top, draggable, and remembers its position.
+- **FR-1 [M1]** By default Frank lives in the menu bar (macOS) or the system
+  tray (Windows, Linux). He is out of sight until summoned.
 - **FR-2 [M1]** A global hotkey (default `⌥ Space`, configurable) opens and
   closes the panel from any app.
-- **FR-3 [M1]** The duck shows its state at a glance: idle, listening,
-  thinking, done.
-- **FR-4 [M1]** The duck can be hidden, and it can live in the menu bar or
-  system tray instead of on screen.
+- **FR-3 [M1]** **Sticky mode, off by default.** When on, Frank sits on
+  screen, always on top. He is draggable, remembers his position, and can be
+  toggled from the menu bar icon or settings.
+- **FR-4 [M1]** Frank shows his state at a glance, on the menu bar icon or
+  the sticky duck: idle, listening, thinking, done.
 
 ### 3.2 Input
 
 - **FR-5 [M1]** Type into the panel.
-- **FR-6 [M3]** Push-to-talk. Holding the hotkey records, releasing it
+- **FR-6 [M3]** Push-to-talk. Holding the hotkey records, and releasing it
   transcribes on-device and sends.
-- **FR-7 [M1]** Drop files or text onto the duck to add them as context.
+- **FR-7 [M1]** Drop files or text onto the panel, or onto sticky Frank, to
+  add them as context.
 
 ### 3.3 Context
 
-- **FR-8 [M2]** **Plan finder.** On summon, the duck gathers plans written by
+- **FR-8 [M2]** **Plan finder.** On summon, Frank gathers plans written by
   supported coding agents in a recent window (default 30 minutes), grouped by
   project.
 - **FR-9 [M2]** Supported sources at launch:
   - Claude Code plan files in `~/.claude/plans/` (or the `plansDirectory`
     setting) and recent sessions.
-  - Cursor plan files in `~/.cursor/plans/` and plans saved in the workspace.
+  - Cursor plan files in `~/.cursor/plans/` and plans saved in the
+    workspace.
   - Codex CLI sessions in `~/.codex/sessions/`.
-- **FR-10 [M2]** Repo context: detects the current project (see §5.4) and
-  includes the branch, changed files, and relevant rules files (`AGENTS.md`,
-  `CLAUDE.md`).
-- **FR-11 [M1]** Clipboard context is used only when the user includes it.
-- **FR-12 [M1]** Before using any context, the duck shows what it found and
+- **FR-10 [M2]** Repo context: Frank detects the current project (§5.4) and
+  includes the branch, the changed files, and relevant rules files
+  (`AGENTS.md`, `CLAUDE.md`).
+- **FR-11 [M1]** The clipboard is used as context only when the user
+  includes it.
+- **FR-12 [M1]** Before any context is used, Frank shows what he found and
   lets the user deselect items.
-- **FR-13 [M2]** Near-duplicate plans are merged, and each plan is labelled by
-  its source agent and age.
+- **FR-13 [M2]** Near-duplicate plans are merged, and each plan is labelled
+  with its source agent and age.
 
 ### 3.4 Conversation
 
-- **FR-14 [M1]** The duck listens first and keeps replies short. It asks at
-  most one question per turn.
-- **FR-15 [M1]** When there are two or more options, it can show a
-  side-by-side comparison of the few dimensions that matter (such as undo
-  cost, effort, risk, and fit with the current setup).
-- **FR-16 [M1]** On request ("which would you pick?"), it gives a clear
-  recommendation, the reasons, and what would change its answer.
-- **FR-17 [M1]** It is honest. It does not flatter, and it says when a plan
+- **FR-14 [M1]** Frank listens first and keeps replies short, asking at most
+  one question per turn.
+- **FR-15 [M1]** With two or more options, Frank can show a side-by-side
+  comparison on the few dimensions that matter, such as undo cost, effort,
+  risk and fit with the current setup.
+- **FR-16 [M1]** When asked ("which would you pick?"), Frank gives a clear
+  recommendation, the reasons for it, and what would change his answer.
+- **FR-17 [M1]** Frank is honest. He doesn't flatter, and he says when a plan
   is weaker, including the one the user prefers.
 - **FR-18 [M1]** Replies stream, so the first words appear quickly.
 
@@ -128,40 +134,59 @@ is a valid session. Context is then the repo and whatever the user adds.
 
 - **FR-19 [M1]** "Done" copies the chosen plan and a one-line summary of the
   choice to the clipboard.
-- **FR-20 [M4]** Optionally hand the choice straight back to the agent, for
-  example by writing the chosen plan where the agent will pick it up.
-- **FR-21 [M4]** Optional history: past sessions are listed with their
-  choices and can be reopened.
+- **FR-20 [M4]** Optionally, Frank hands the choice straight back to the
+  agent, for example by writing the chosen plan where the agent will pick it
+  up.
+- **FR-21 [M4]** Optional history lists past sessions with their choices, and
+  any session can be reopened.
 
-### 3.6 Models
+### 3.6 Frank's brain
 
-- **FR-22 [M1]** Bring your own model: Anthropic, OpenAI, any
-  OpenAI-compatible endpoint, or a local model through Ollama.
-- **FR-23 [M1]** First run auto-detects `ANTHROPIC_API_KEY` or
-  `OPENAI_API_KEY` in the environment and any running Ollama, then asks the
-  user to confirm one.
-- **FR-24 [M1]** If the model is unreachable, the duck says so plainly and
-  keeps the user's input so they can retry.
+- **FR-22** Frank thinks with whichever AI the user already has:
+
+  | Brain | How | Milestone |
+  | --- | --- | --- |
+  | Claude Code (Pro, Max or API) | Runs the user's installed `claude` in headless mode | M1 |
+  | API key: Anthropic, OpenAI, OpenAI-compatible | Direct API calls | M1 |
+  | Local model | Ollama | M1 |
+  | GitHub Copilot (any plan, including Free) | Official Copilot SDK | M2 |
+  | Cursor | Cursor CLI in headless mode | M2 |
+
+- **FR-23 [M1]** On first run, Frank detects installed agent CLIs,
+  `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` in the environment, and a running
+  Ollama. He then asks the user to pick one; this can be changed later in
+  settings.
+- **FR-24 [M1]** Agent-backed brains are used read-only. Frank asks for
+  answers only: no file edits, no shell commands and no other tools.
+- **FR-25 [M1]** If the brain is unreachable, signed out, or out of quota,
+  Frank says so plainly (for example, "Claude Code isn't signed in; open it
+  and log in") and keeps the user's input so they can retry.
 
 ---
 
 ## 4. Non-functional requirements
 
-- **NFR-1 Fast.** The panel appears within 150 ms of the hotkey, and the
-  first streamed words appear within about 1.5 s on a hosted model.
-- **NFR-2 Light.** Idle memory stays small (target under 100 MB) with near-zero
-  CPU. The duck must never be something people quit to save battery.
-- **NFR-3 Private.** No telemetry and no network calls except to the chosen
-  model provider. Context is read only on summon.
-- **NFR-4 Secrets.** API keys are stored in the OS keychain, never in plain
-  config files or logs. Common secret patterns are stripped from context
-  before it is sent.
+- **NFR-1 Fast.**
+  - The panel appears within 150 ms of the hotkey.
+  - First streamed words appear within about 1.5 s on API brains and within
+    about 4 s on agent-backed brains.
+  - Agent CLIs are warmed or kept alive when possible (§6.3).
+- **NFR-2 Light.** Idle memory stays small (target under 100 MB) with
+  near-zero CPU. Frank must never be something people quit to save battery.
+- **NFR-3 Private.** No telemetry, and no network calls except to the chosen
+  brain. Context is read only on summon.
+- **NFR-4 Credentials.**
+  - Frank never reads, stores or passes on credentials that belong to an
+    agent. Users sign in through each agent's own flow.
+  - API keys Frank does manage are stored in the OS keychain, never in plain
+    config files or logs.
+  - Common secret patterns are stripped from context before it is sent.
 - **NFR-5 Cross-platform.** macOS first, then Windows and Linux.
-- **NFR-6 Accessible.** Fully keyboard-driven. State is not conveyed by colour
-  alone.
-- **NFR-7 Resilient to agent changes.** Plan-finder adapters are isolated, so
-  a format change in one agent breaks only that adapter, and the duck still
-  works with the others.
+- **NFR-6 Accessible.** Frank is fully keyboard-driven, and his state is never
+  shown by colour alone.
+- **NFR-7 Resilient to agent changes.** Plan-finder adapters and brain
+  adapters are isolated. A change in one agent breaks only that adapter, and
+  the rest keep working.
 - **NFR-8 Small and auditable.** Few dependencies and readable code, because
   this is a tool people trust with their context.
 
@@ -175,25 +200,26 @@ Everything is local. Nothing is written into the user's repos.
 
 ```
 ~/.frank/
-  config.toml              # model, hotkey, duck position, plan window
+  config.toml              # brain, hotkey, sticky mode, plan window
   sessions/
     2026-09-28T14-02-11.json   # one file per session (history, M4)
 ```
 
-API keys live in the OS keychain, referenced by name from `config.toml`.
+API keys managed by Frank live in the OS keychain and are referenced by name
+from `config.toml`. Agent credentials stay with the agents.
 
 ### 5.2 Config (`config.toml`)
 
 | Key | Default | Notes |
 | --- | --- | --- |
-| `model.provider` | detected | `anthropic` \| `openai` \| `openai-compatible` \| `ollama` |
-| `model.name` | detected | Provider model ID |
-| `model.base_url` | none | For OpenAI-compatible or Ollama |
+| `brain.kind` | chosen on first run | `claude-code` \| `copilot` \| `cursor` \| `anthropic` \| `openai` \| `openai-compatible` \| `ollama` |
+| `brain.model` | brain's default | Optional model override where the brain supports it |
+| `brain.base_url` | none | For OpenAI-compatible endpoints or Ollama |
 | `hotkey` | `Alt+Space` | Global shortcut |
+| `sticky.enabled` | `false` | Sticky mode: Frank always on screen |
+| `sticky.position` | bottom-right | Last dragged position (sticky mode) |
 | `plans.window_minutes` | `30` | How far back the plan finder looks |
-| `plans.sources` | all | Enabled adapters |
-| `duck.position` | bottom-right | Last dragged position |
-| `duck.mode` | `screen` | `screen` or `menubar` |
+| `plans.sources` | all | Enabled plan-finder adapters |
 
 ### 5.3 In-memory types
 
@@ -209,8 +235,9 @@ type Plan = {
 
 type Session = {
   startedAt: Date;
+  brain: string;          // e.g. 'claude-code'
   context: { plans: Plan[]; repo?: RepoInfo; extras: string[] };
-  messages: { role: 'user' | 'duck'; text: string }[];
+  messages: { role: 'user' | 'frank'; text: string }[];
   choice?: { plan?: Plan; summary: string };
 };
 ```
@@ -219,13 +246,13 @@ type Session = {
 
 Plans are grouped by the project they belong to:
 
-- **Codex sessions** record the working directory.
-- **Claude Code sessions** are stored per project.
-- **Plan files** are matched by the file paths they mention.
+- Codex sessions record their working directory.
+- Claude Code sessions are stored per project.
+- Plan files are matched by the file paths they mention.
 
-The "current project" is the one with the most recent activity. The user can
-switch it in one click. Frontmost-app detection (the active terminal or
-editor) is a later refinement.
+The "current project" is the one with the most recent activity, and the user
+can switch it in one click. Detecting the frontmost app (the active terminal
+or editor) is a later refinement.
 
 ---
 
@@ -236,28 +263,27 @@ editor) is a later refinement.
 ```
 ┌────────────────────────────── Tauri app ──────────────────────────────┐
 │  UI (TypeScript/React, webview)                                        │
-│   duck window · panel · comparison view · settings                     │
-│   conversation engine · prompt builder · provider layer (AI SDK)       │
-│        │  fetch via Tauri HTTP plugin          ▲ events                │
+│   menu bar panel · sticky duck · comparison view · settings            │
+│   conversation engine · prompt builder                                 │
+│        │                                        ▲ events               │
 ├────────┼────────────────────────────────────────┼──────────────────────┤
-│  Core (Rust)                                    │                      │
-│   global hotkey · window (always-on-top) · plan finder adapters        │
-│   repo reader (git) · clipboard · keychain · local STT (whisper.cpp)   │
+│  Core (Rust)                                                           │
+│   global hotkey · tray/menu bar · sticky window (always-on-top)        │
+│   plan finder adapters · repo reader (git) · clipboard · keychain      │
+│   brain adapters · local STT (whisper.cpp)                             │
 └────────────────────────────────────────────────────────────────────────┘
-          │                                   │
-   ~/.claude/plans, ~/.cursor/plans,     model provider
-   ~/.codex/sessions, current repo       (API or local Ollama)
+      │                                   │
+ ~/.claude/plans, ~/.cursor/plans,    brains: claude (headless) · Copilot SDK ·
+ ~/.codex/sessions, current repo      Cursor CLI · APIs · Ollama
 ```
 
-- **Tauri 2** keeps the app small and native. It provides always-on-top
-  transparent windows, a global-shortcut plugin, and an HTTP plugin that
-  lets the UI call model APIs without browser CORS limits.
-- **Rust core** handles OS-level work: the hotkey, window behaviour, reading
-  agent files, git, keychain, and on-device speech-to-text.
-- **TypeScript UI** holds the conversation engine and the provider layer.
-  The Vercel AI SDK, given the Tauri fetch, covers Anthropic, OpenAI,
-  OpenAI-compatible endpoints and Ollama behind one interface, with
-  streaming.
+- **Tauri 2** keeps the app small and native. It supplies the tray/menu bar
+  icon, an optional always-on-top transparent window for sticky mode, and a
+  global-shortcut plugin.
+- The **Rust core** handles OS-level work: the hotkey, windows, reading agent
+  files, git, the keychain, on-device speech-to-text, and running brains.
+- The **TypeScript UI** owns the conversation: it builds prompts, renders
+  streamed replies, and shows comparisons.
 
 ### 6.2 Plan finder
 
@@ -271,61 +297,102 @@ interface PlanSource {
 }
 ```
 
-- **Claude Code:** read `*.md` in the plans directory (the default
-  `~/.claude/plans/`, or `plansDirectory` from user or project settings).
-  Also scan recent session transcripts for a plan the user hasn't saved.
+- **Claude Code:** read `*.md` in the plans directory. That is `~/.claude/plans/`
+  by default, or `plansDirectory` from user or project settings. Also scan
+  recent session transcripts for a plan that hasn't been saved.
 - **Cursor:** read `~/.cursor/plans/*.plan.md` and any `*.plan.md` in the
   current workspace.
-- **Codex:** read recent `rollout-*.jsonl` files under
-  `~/.codex/sessions/YYYY/MM/DD/`. Extract the latest proposed plan (the
-  plan-tool output, or the last long assistant message) and the session's
-  working directory.
+- **Codex:** read recent `rollout-*.jsonl` under `~/.codex/sessions/YYYY/MM/DD/`.
+  From each, extract the latest proposed plan (the plan-tool output or the
+  last long assistant message) and the session's working directory.
 
-The finder runs only when the duck is summoned. Its steps:
+The finder runs only when Frank is summoned. It asks each adapter for items
+newer than the window, groups them by project, merges near-duplicates, and
+sorts by recency. Adapters are read-only and fail independently.
 
-1. Ask each adapter for items newer than the window.
-2. Group the results by project.
-3. Merge near-duplicates.
-4. Sort by recency.
+### 6.3 Brains
 
-Adapters are read-only and fail independently. If one agent changes its
-format, the other adapters keep working.
+One interface covers every brain:
 
-### 6.3 Conversation engine
+```ts
+interface Brain {
+  id: string;                               // 'claude-code', 'copilot', 'ollama', ...
+  detect(): Promise<'ready' | 'signed-out' | 'missing'>;
+  stream(system: string, messages: Msg[]): AsyncIterable<string>;
+}
+```
 
-- **Prompt.** A short system prompt defines the duck's behaviour: listen
-  first; keep replies to a few sentences; ask at most one question; compare
-  options on the dimensions that matter; be honest and never flatter; give a
-  clear recommendation when asked, with reasons and what would change it.
-  The confirmed context (plans, repo summary, extras) is included as labelled
+**API brains** (Anthropic, OpenAI, OpenAI-compatible, Ollama) call the
+provider directly and stream tokens. Keys come from the keychain or the
+environment.
+
+**Agent-backed brains** reuse the user's existing subscription through each
+vendor's own supported surface:
+
+- **Claude Code.** Frank runs the user's installed `claude` binary in
+  headless (print) mode, with streaming output. The prompt and context go in
+  on stdin, and all tools are disabled so the run is answer-only. The user
+  signs in inside Claude Code; Frank never reads or passes on that login.
+- **GitHub Copilot.** Frank uses the official Copilot SDK. The user signs in
+  with GitHub, and each prompt counts toward their Copilot allowance. Copilot
+  Free works too.
+- **Cursor.** Frank runs the Cursor CLI in headless (print) mode, which uses
+  the user's Cursor subscription. Answers only; changes are never applied.
+
+**Rules for agent-backed brains.** These follow the vendors' published terms
+and hold for every agent:
+
+- Run the official binary or SDK unmodified.
+- Never collect, store or pass on the user's credentials; sign-in always
+  happens through the vendor's own flow.
+- Run in the user's own session, billed to the user's own plan. Frank never
+  resells or pools usage.
+- Answers only: no file edits, no shell commands, no other tools.
+
+**Latency.** Spawning a CLI adds startup time, so Frank starts the chosen
+agent's process when the panel opens, while the user is still typing. Where
+the CLI supports keeping a process alive, Frank reuses it within a session.
+
+### 6.4 Conversation engine
+
+- **Prompt.** A short system prompt defines Frank's behaviour:
+  - Listen first and keep replies to a few sentences.
+  - Ask at most one question per turn.
+  - Compare options on the dimensions that matter.
+  - Be honest and never flatter.
+  - When asked, give a clear recommendation, with reasons and what would
+    change it.
+
+  The confirmed context (plans, repo summary, extras) goes in as labelled
   blocks.
-- **Context budget.** Plans are trimmed to fit the model's context window.
-  Headings and steps are kept before details. Repo context is a compact
+- **Context budget.** Plans are trimmed to fit the brain's context window,
+  keeping headings and steps before details. Repo context is a compact
   summary (branch, changed file list, rules files), not file contents, unless
   the user adds a file.
-- **Comparison view.** When there are two or more plans, the engine asks the
-  model for a small comparison table (options × 3–4 dimensions). The panel
-  renders it; plain text is the fallback.
-- **Streaming** everywhere. Sessions are held in memory, and history is saved
+- **Comparison view.** With two or more plans, the engine asks the brain for
+  a small table (options × 3–4 dimensions). The panel renders it, with plain
+  text as the fallback.
+- **Streaming everywhere.** Sessions are held in memory, and history is saved
   from M4.
 
-### 6.4 Voice
+### 6.5 Voice
 
 Push-to-talk only: hold the hotkey to record, release to transcribe. Speech
 is transcribed on-device with whisper.cpp, or Apple's speech framework on
-macOS, then sent as a normal message. There is no always-on microphone and no
-spoken replies in the first versions.
+macOS, then sent as a normal message. There is no always-on microphone and
+Frank doesn't speak his replies in the first versions.
 
-### 6.5 Privacy and security
+### 6.6 Privacy and security
 
-- Files are read only on summon, and only from the known agent directories,
-  the current repo, and anything the user adds.
+- Frank reads only on summon, and only from the known agent directories, the
+  current repo, and anything the user adds.
 - The user sees and confirms the context before it's sent.
-- Context goes only to the configured provider. Ollama keeps everything
-  local.
-- Common secret patterns (API keys, tokens, `.env` values) are stripped
-  before sending. This is best-effort and is documented as such.
-- Keys are stored in the keychain. The duck has no telemetry.
+- Context goes only to the chosen brain. With Ollama, nothing leaves the
+  machine.
+- Common secret patterns are stripped before sending. This is best-effort and
+  documented as such.
+- Agent credentials stay with the agents. Frank's own API keys live in the
+  keychain. There is no telemetry.
 
 ---
 
@@ -333,34 +400,41 @@ spoken replies in the first versions.
 
 ### M1 — The duck you can talk to
 
-A Tauri app with the duck window, global hotkey, panel and typed
-conversation. It includes model setup with auto-detection, context from the
-clipboard and dropped files, the comparison view, recommendation on request,
-and copy-on-done. macOS first.
+- Tauri app with the menu bar icon, global hotkey and panel.
+- Sticky mode, off by default.
+- Typed conversation.
+- Brains: Claude Code (headless), API keys and Ollama, with auto-detection.
+- Context from the clipboard and dropped files.
+- The comparison view, recommendations on request, and copy on done.
+- macOS first.
 
-**Exit:** summon the duck anywhere, paste two plans, and get a clear
-comparison and recommendation in under a minute.
+**Exit:** a Claude Code user summons Frank, pastes two plans, and gets a clear
+comparison and recommendation in under a minute, with no new API key.
 
-### M2 — It finds the plans
+### M2 — He finds the plans, on more subscriptions
 
-Plan-finder adapters for Claude Code, Cursor and Codex, plus project
-grouping, repo context, and a "found N plans, use these?" confirmation.
+- Plan-finder adapters for Claude Code, Cursor and Codex.
+- Project grouping and repo context.
+- A "found N plans, use these?" confirmation.
+- Copilot SDK and Cursor CLI brains.
 
-**Exit:** after an agent writes a plan, summoning the duck shows that plan
-with no copy-pasting.
+**Exit:** right after an agent writes a plan, summoning Frank shows that plan
+with no copy-pasting, using any of the supported brains.
 
-### M3 — Talk to it
+### M3 — Talk to him
 
 Push-to-talk with on-device transcription.
 
-**Exit:** hold the hotkey, say "help me pick between these," and the session
+**Exit:** hold the hotkey and say "help me pick between these." The session
 starts with the found plans.
 
 ### M4 — Close the loop
 
-Optional session history. Hand the chosen plan back to the agent. Windows
-and Linux builds. More adapters (for example Copilot CLI, Gemini CLI and
-Cline) contributed as small adapter modules.
+- Optional session history.
+- Hand the chosen plan back to the agent.
+- Windows and Linux builds.
+- More adapters, such as Copilot CLI, Gemini CLI and Cline, contributed as
+  small modules.
 
 **Exit:** a public release that installs in one step on all three operating
 systems.
@@ -369,21 +443,32 @@ systems.
 
 ## 8. Risks and open questions
 
+- **Vendor terms can change.** Anthropic prohibits third-party apps from using
+  Claude.ai subscription logins directly. Frank's Claude path relies on
+  running the user's own unmodified Claude Code, which the published terms
+  describe as permitted. Before release, confirm this with Anthropic, and
+  review the Copilot and Cursor terms too. Brain adapters are isolated, so
+  any one path can be dropped without affecting the rest.
 - **Agent file formats change.** Plan locations and transcript formats aren't
   public APIs. Mitigation: isolated adapters, fixture tests per agent
   version, and graceful skipping.
-- **Claude Code deletes old data.** Its cleanup (default 30 days) removes old
-  plan files. That's fine for recent plans, but it means the duck can't rely
-  on agent directories for history.
+- **Claude Code deletes old data.** Its cleanup (30 days by default) removes
+  old plan files. Recent plans are fine, but Frank can't rely on agent
+  directories for history.
+- **Agent brains are slower.** CLI startup adds latency. Mitigation: warm the
+  process on summon, and show a thinking state immediately.
+- **Usage limits.** Frank's sessions count toward the user's plan limits.
+  Sessions are short by design. Frank shows which brain he's using, so usage
+  is never a surprise.
 - **Picking the right project.** Recency is a good guess but won't always be
-  right. The one-click project switcher is the fallback.
+  right; the one-click project switcher is the fallback.
 - **Model quality varies.** Small local models may compare plans poorly. The
-  docs will recommend models, and the settings screen will note weaker ones.
-- **Always-on-top etiquette.** The duck must never cover what the user is
-  working on. It needs easy hiding, a menu-bar mode, and a position that
-  stays put.
-- **Name.** A few small agent-tooling projects already use "frank". Before
-  release, check the trademark and package-name availability.
+  docs recommend models, and settings flag weaker ones.
+- **Sticky etiquette.** Sticky Frank must never cover what the user is working
+  on, so he needs easy hiding and a position that stays put. That's also why
+  sticky mode is off by default.
+- **Name.** A few small agent-tooling projects already use "frank". Check the
+  trademark and package-name availability before release.
 
 ## 9. How we'll know it works
 
@@ -391,7 +476,9 @@ systems.
   minutes).
 - **No-paste rate:** share of sessions where the plans came from the plan
   finder rather than pasting.
-- **Coming back:** people still summoning the duck after 4 weeks.
-- **Honesty check:** a small set of scripted sessions run per model, checking
-  that the duck stays brief, asks at most one question per turn, and doesn't
-  just agree with the user's preferred option.
+- **No-new-bill rate:** share of users running Frank on a subscription they
+  already had.
+- **Coming back:** people still summoning Frank after 4 weeks.
+- **Honesty check:** a small set of scripted sessions run per brain, checking
+  that Frank stays brief, asks at most one question per turn, and doesn't just
+  agree with the user's preferred option.
