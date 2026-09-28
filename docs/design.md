@@ -1,9 +1,11 @@
 # Frank — Design
 
 Frank is a small desktop duck you summon with a hotkey when you're
-overwhelmed. He finds the context you're working in, including the plans your
-coding agents just wrote, talks the problem through with you, and helps you
-choose the best option. He runs on the AI subscription you already have.
+overwhelmed. He loads the plan your coding agent just wrote and picks out the
+calls that matter: the options it offers, the choices it made quietly, and
+the assumptions it relies on. He checks them against your code, talks each
+one through with you, and hands your decisions back to the agent. He runs on
+the AI subscription you already have.
 
 - **Product overview:** [../README.md](../README.md)
 - **This doc:** requirements, data model, architecture and work plan.
@@ -16,61 +18,84 @@ Priority tags: **[M1]**–**[M4]** refer to the milestones in §7.
 
 ### 1.1 The problem
 
-Coding agents now produce plans faster than developers can evaluate them. A
-developer often ends up with several plausible approaches from one or more
-agents and no quick way to pick one. Asking yet another chat window means
-copy-pasting plans, re-explaining the repo, and getting a long answer back.
+A coding agent's plan is really a bundle of decisions. Some are explicit:
+"we could store counts in Redis or in memory." Many are silent: a new
+dependency, a schema change, "apply this to every route," an assumption that
+a service exists. Checking each one takes time and context, so developers
+often approve the whole plan at once. The calls that were wrong come back
+later as rework.
+
+Asking another chat window for help means copy-pasting the plan,
+re-explaining the repo, and getting a long essay back.
 
 ### 1.2 The product
 
-A duck that lives in your menu bar or, in sticky mode, on your screen. Press a
-hotkey, then talk or type. He already has the context: recent agent plans,
-your repo, and your clipboard if you add it. He asks a question or two,
-compares the options, and gives you a recommendation when you ask. His brain
-is whichever AI you already pay for: Claude Code, GitHub Copilot, Cursor, an
-API key, or a local model. A session takes a minute or two, then Frank gets
-out of the way.
+Frank lives in your menu bar, or on your screen in sticky mode. Press a
+hotkey, then talk or type. The flow:
+
+1. He already has the plan, your repo, and the files the plan touches.
+2. He lists the few calls worth a second look, hardest to undo first.
+3. He walks through them with you one at a time: the options side by side,
+   one good question, a check against your code, and a recommendation if you
+   ask.
+4. He writes a short note with your decisions for you to give back to your
+   agent.
+
+His brain is whichever AI you already pay for: Claude Code, GitHub Copilot,
+Cursor, an API key, or a local model.
 
 ### 1.3 Goals
 
 - Summoning Frank is instant: one hotkey, from anywhere.
-- No copy-pasting: Frank finds recent agent plans himself.
-- No new bill: he runs on the subscription the developer already has.
-- The user reaches a clear choice quickly, with trade-offs made explicit.
-- Honest help: Frank disagrees when a plan is worse.
+- No copy-pasting: Frank finds the plan you're working on.
+- The calls that matter in a plan get surfaced, including the silent ones.
+- Choices are checked against the real code, not just argued in the
+  abstract.
+- The result goes straight back to the agent as a short, clear note.
+- No new bill: Frank runs on the subscription the developer already has.
+- Honest help: Frank disagrees when a choice is wrong, whoever made it.
 
 ### 1.4 Non-goals
 
-- Writing or editing code. Frank helps you choose; your agent does the work.
+- Writing or editing code. Frank helps you decide; your agent does the work.
+- Rewriting the agent's plan wholesale. Frank focuses on the few calls that
+  matter.
 - Watching your screen or speaking up unprompted.
 - Accounts, cloud sync or telemetry.
-- Replacing your coding agent's chat.
 
 ---
 
 ## 2. User flow
 
 ```
- ⌥ Space ──▶ panel opens ──▶ context found ──▶ talk it through ──▶ choice
-   (hold to talk,       (plans from the last ~30 min,  (question, comparison,  (copied, ready
-    or type)             repo, clipboard; confirm)       recommendation)         for your agent)
+ ⌥ Space ─▶ plan loaded ─▶ key calls listed ─▶ talk through each ─▶ note for your agent
+  (hold to talk,  (latest plan in this       (options, silent choices,  (options, one question,  (copied, ready
+   or type)        project + touched files)   assumptions; ranked)       code check, verdict)     to paste)
 ```
 
 1. **Summon.** A hotkey or a click on Frank opens a small panel: under the
    menu bar icon by default, or next to Frank in sticky mode. Holding the
    hotkey records voice, and releasing sends. Typing works too.
-2. **Context.** Frank lists what he found, such as "2 plans from Claude Code
-   and Cursor in `my-app/`". The user confirms, deselects items, or adds more
-   (a file, the clipboard).
-3. **Talk.** Frank replies briefly. Usually he asks one clarifying question,
-   then shows a side-by-side comparison.
-4. **Choose.** The user asks "which would you pick?" or picks one. Frank gives
-   a short recommendation with reasons and says what would change his answer.
-5. **Done.** The chosen plan and a one-line summary are copied to the
-   clipboard. The panel closes.
+2. **Plan.** Frank loads the most recent plan for the current project, plus
+   the repo summary and the files the plan mentions. One click switches to a
+   different recent plan or adds context such as a file or the clipboard.
+3. **Key calls.** Frank lists up to five decision points, hardest to undo
+   first. For each one he shows what the plan chose and the alternative. The
+   user picks where to start, or says "all fine" for any of them.
+4. **Talk it through.** For each call, Frank shows the options side by side,
+   notes anything the code says about it (for example, "no Redis in your
+   repo"), asks one question, and recommends when asked. The user decides:
+   keep the plan's choice, change it, or drop the step.
+5. **Done.** Frank composes a short note for the agent listing what to keep
+   and what to change. It is copied to the clipboard, and the panel closes.
 
-Frank also works without plans. "I've been stuck on this bug for an hour" is
-a valid session, with the repo and whatever the user adds as context.
+Other sessions follow the same shape:
+
+- **Two plans:** Frank compares them the same way, decision by decision.
+- **An idea, no plan:** "Should I split this service?" Frank talks it
+  through with the repo as context.
+- **Just stuck:** "I've been on this bug for an hour." A plain conversation
+  with the repo as context.
 
 ---
 
@@ -79,14 +104,14 @@ a valid session, with the repo and whatever the user adds as context.
 ### 3.1 Frank on screen
 
 - **FR-1 [M1]** By default Frank lives in the menu bar (macOS) or the system
-  tray (Windows, Linux). He is out of sight until summoned.
+  tray (Windows, Linux) and is out of sight until summoned.
 - **FR-2 [M1]** A global hotkey (default `⌥ Space`, configurable) opens and
   closes the panel from any app.
-- **FR-3 [M1]** **Sticky mode, off by default.** When on, Frank sits on
-  screen, always on top. He is draggable, remembers his position, and can be
+- **FR-3 [M1]** **Sticky mode, off by default.** When it's on, Frank sits on
+  screen, always on top. He's draggable, remembers his position, and can be
   toggled from the menu bar icon or settings.
-- **FR-4 [M1]** Frank shows his state at a glance, on the menu bar icon or
-  the sticky duck: idle, listening, thinking, done.
+- **FR-4 [M1]** Frank shows his state at a glance on the menu bar icon or the
+  sticky duck: idle, listening, thinking, done.
 
 ### 3.2 Input
 
@@ -94,55 +119,78 @@ a valid session, with the repo and whatever the user adds as context.
 - **FR-6 [M3]** Push-to-talk. Holding the hotkey records, and releasing it
   transcribes on-device and sends.
 - **FR-7 [M1]** Drop files or text onto the panel, or onto sticky Frank, to
-  add them as context.
+  add them as context. A pasted plan works the same as a found one.
 
-### 3.3 Context
+### 3.3 Finding the plan
 
-- **FR-8 [M2]** **Plan finder.** On summon, Frank gathers plans written by
-  supported coding agents in a recent window (default 30 minutes), grouped by
-  project.
+- **FR-8 [M2]** **Plan finder.** On summon, Frank finds recent plans from
+  supported coding agents (by default, the last 30 minutes). He opens the
+  most recent plan for the current project, and one click switches to
+  another.
 - **FR-9 [M2]** Supported sources at launch:
   - Claude Code plan files in `~/.claude/plans/` (or the `plansDirectory`
     setting) and recent sessions.
-  - Cursor plan files in `~/.cursor/plans/` and plans saved in the
-    workspace.
+  - Cursor plan files in `~/.cursor/plans/` and plans saved in the workspace.
   - Codex CLI sessions in `~/.codex/sessions/`.
 - **FR-10 [M2]** Repo context: Frank detects the current project (§5.4) and
-  includes the branch, the changed files, and relevant rules files
-  (`AGENTS.md`, `CLAUDE.md`).
-- **FR-11 [M1]** The clipboard is used as context only when the user
-  includes it.
-- **FR-12 [M1]** Before any context is used, Frank shows what he found and
+  includes the branch, changed files, and rules files (`AGENTS.md`,
+  `CLAUDE.md`).
+- **FR-11 [M1]** **Touched files.** Frank reads the files the plan
+  mentions, read-only and within a size budget. His checks can then use the
+  real code.
+- **FR-12 [M1]** The clipboard is used as context only when the user includes
+  it.
+- **FR-13 [M1]** Before any context is used, Frank shows what he loaded and
   lets the user deselect items.
-- **FR-13 [M2]** Near-duplicate plans are merged, and each plan is labelled
-  with its source agent and age.
 
-### 3.4 Conversation
+### 3.4 Breaking down the plan
 
-- **FR-14 [M1]** Frank listens first and keeps replies short, asking at most
-  one question per turn.
-- **FR-15 [M1]** With two or more options, Frank can show a side-by-side
-  comparison on the few dimensions that matter, such as undo cost, effort,
-  risk and fit with the current setup.
-- **FR-16 [M1]** When asked ("which would you pick?"), Frank gives a clear
-  recommendation, the reasons for it, and what would change his answer.
-- **FR-17 [M1]** Frank is honest. He doesn't flatter, and he says when a plan
-  is weaker, including the one the user prefers.
-- **FR-18 [M1]** Replies stream, so the first words appear quickly.
+- **FR-14 [M1]** Frank extracts the plan's **decision points**:
+  - **Options:** alternatives the plan names ("Redis or in memory").
+  - **Silent choices:** consequential choices made without asking, such as
+    new dependencies, new services, schema or data migrations, public API
+    changes, deletions, and scope ("every route").
+  - **Assumptions:** things the plan relies on that the code might not
+    support ("Redis is available").
+- **FR-15 [M1]** Decision points are ranked with the hardest to undo first.
+  At most five are shown, and trivial ones are left out.
+- **FR-16 [M1]** For each decision point, Frank shows what the plan chose, the
+  realistic alternative(s), and any evidence from the code, with the file it
+  came from.
+- **FR-17 [M1]** Frank flags assumptions the code contradicts or doesn't
+  support. Example: "the plan uses Redis; there's no Redis config in this
+  repo."
 
-### 3.5 Finishing
+### 3.5 Talking it through
 
-- **FR-19 [M1]** "Done" copies the chosen plan and a one-line summary of the
-  choice to the clipboard.
-- **FR-20 [M4]** Optionally, Frank hands the choice straight back to the
-  agent, for example by writing the chosen plan where the agent will pick it
-  up.
-- **FR-21 [M4]** Optional history lists past sessions with their choices, and
-  any session can be reopened.
+- **FR-18 [M1]** Frank takes the decisions one at a time, starting with the
+  one the user picks. He keeps replies short and asks at most one question
+  per turn.
+- **FR-19 [M1]** For each decision, he shows the options side by side on the
+  few dimensions that matter: undo cost, effort, risk, and fit with the
+  current code.
+- **FR-20 [M1]** Asked "what would you do?", Frank gives a clear
+  recommendation, the reasons, and what would change his answer.
+- **FR-21 [M1]** Frank is honest. He doesn't flatter, and he says when a
+  choice is wrong, whether it's the plan's or the user's.
+- **FR-22 [M1]** For each decision the user can keep the plan's choice,
+  change it, or drop the step. "All fine" skips the rest.
+- **FR-23 [M1]** Replies stream, so the first words appear quickly.
 
-### 3.6 Frank's brain
+### 3.6 Finishing
 
-- **FR-22** Frank thinks with whichever AI the user already has:
+- **FR-24 [M1]** **Note for your agent.** When the user is done, Frank writes
+  a short message listing what to keep, what to change, and what to drop. It
+  is written for the agent to act on and copied to the clipboard.
+- **FR-25 [M4]** Optionally, Frank hands the note straight back to the agent
+  instead of copying it, for example by writing it where the agent will pick
+  it up.
+- **FR-26 [M4]** Optional history lists past sessions with their decisions,
+  and any of them can be reopened.
+
+### 3.7 Frank's brain
+
+- **FR-27** Frank thinks with whichever AI the user already has:
 
   | Brain | How | Milestone |
   | --- | --- | --- |
@@ -152,13 +200,14 @@ a valid session, with the repo and whatever the user adds as context.
   | GitHub Copilot (any plan, including Free) | Official Copilot SDK | M2 |
   | Cursor | Cursor CLI in headless mode | M2 |
 
-- **FR-23 [M1]** On first run, Frank detects installed agent CLIs,
+- **FR-28 [M1]** On first run, Frank detects installed agent CLIs,
   `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` in the environment, and a running
-  Ollama. He then asks the user to pick one; this can be changed later in
-  settings.
-- **FR-24 [M1]** Agent-backed brains are used read-only. Frank asks for
-  answers only: no file edits, no shell commands and no other tools.
-- **FR-25 [M1]** If the brain is unreachable, signed out, or out of quota,
+  Ollama. He asks the user to pick one, and the choice can be changed later
+  in settings.
+- **FR-29 [M1]** Agent-backed brains are answer-only: no file edits, no shell
+  commands, no tools. Frank gathers the code context himself (FR-11), so
+  every brain gets the same context.
+- **FR-30 [M1]** If the brain is unreachable, signed out, or out of quota,
   Frank says so plainly (for example, "Claude Code isn't signed in; open it
   and log in") and keeps the user's input so they can retry.
 
@@ -168,22 +217,24 @@ a valid session, with the repo and whatever the user adds as context.
 
 - **NFR-1 Fast.**
   - The panel appears within 150 ms of the hotkey.
-  - First streamed words appear within about 1.5 s on API brains and within
-    about 4 s on agent-backed brains.
-  - Agent CLIs are warmed or kept alive when possible (§6.3).
+  - The decision list appears within about 5 s on API brains and about 8 s
+    on agent-backed brains.
+  - After that, replies start streaming within 1.5 s (API brains) or 4 s
+    (agent brains).
 - **NFR-2 Light.** Idle memory stays small (target under 100 MB) with
   near-zero CPU. Frank must never be something people quit to save battery.
 - **NFR-3 Private.** No telemetry, and no network calls except to the chosen
-  brain. Context is read only on summon.
+  brain. Context is read only on summon, and code files are read only when
+  the plan mentions them or the user adds them.
 - **NFR-4 Credentials.**
   - Frank never reads, stores or passes on credentials that belong to an
     agent. Users sign in through each agent's own flow.
-  - API keys Frank does manage are stored in the OS keychain, never in plain
+  - API keys that Frank manages are stored in the OS keychain, never in plain
     config files or logs.
   - Common secret patterns are stripped from context before it is sent.
 - **NFR-5 Cross-platform.** macOS first, then Windows and Linux.
-- **NFR-6 Accessible.** Frank is fully keyboard-driven, and his state is never
-  shown by colour alone.
+- **NFR-6 Accessible.** Fully keyboard-driven. State is never shown by colour
+  alone.
 - **NFR-7 Resilient to agent changes.** Plan-finder adapters and brain
   adapters are isolated. A change in one agent breaks only that adapter, and
   the rest keep working.
@@ -220,6 +271,7 @@ from `config.toml`. Agent credentials stay with the agents.
 | `sticky.position` | bottom-right | Last dragged position (sticky mode) |
 | `plans.window_minutes` | `30` | How far back the plan finder looks |
 | `plans.sources` | all | Enabled plan-finder adapters |
+| `context.max_file_kb` | `200` | Budget for touched files read per session |
 
 ### 5.3 In-memory types
 
@@ -231,14 +283,27 @@ type Plan = {
   project?: string;       // absolute path of the repo it belongs to, if known
   modifiedAt: Date;
   origin: string;         // file path it was read from
+  touchedFiles: string[]; // repo paths the plan mentions
+};
+
+type Decision = {
+  title: string;                                // "Where to store counts"
+  kind: 'option' | 'silent-choice' | 'assumption';
+  planChoice: string;                           // what the plan does
+  alternatives: string[];                       // realistic other options
+  undoCost: 'high' | 'medium' | 'low';          // used for ranking
+  evidence: { file: string; note: string }[];   // what the code says
+  outcome?: { verdict: 'keep' | 'change' | 'drop'; detail?: string };
 };
 
 type Session = {
   startedAt: Date;
   brain: string;          // e.g. 'claude-code'
-  context: { plans: Plan[]; repo?: RepoInfo; extras: string[] };
+  plan?: Plan;
+  context: { repo?: RepoInfo; extras: string[] };
+  decisions: Decision[];
   messages: { role: 'user' | 'frank'; text: string }[];
-  choice?: { plan?: Plan; summary: string };
+  agentNote?: string;     // the note handed back to the agent
 };
 ```
 
@@ -250,7 +315,7 @@ Plans are grouped by the project they belong to:
 - Claude Code sessions are stored per project.
 - Plan files are matched by the file paths they mention.
 
-The "current project" is the one with the most recent activity, and the user
+The current project is the one with the most recent activity, and the user
 can switch it in one click. Detecting the frontmost app (the active terminal
 or editor) is a later refinement.
 
@@ -263,27 +328,32 @@ or editor) is a later refinement.
 ```
 ┌────────────────────────────── Tauri app ──────────────────────────────┐
 │  UI (TypeScript/React, webview)                                        │
-│   menu bar panel · sticky duck · comparison view · settings            │
-│   conversation engine · prompt builder                                 │
+│   menu bar panel · sticky duck · decision list · side-by-side view     │
+│   session engine: breakdown → talk-through → agent note                │
 │        │                                        ▲ events               │
 ├────────┼────────────────────────────────────────┼──────────────────────┤
 │  Core (Rust)                                                           │
 │   global hotkey · tray/menu bar · sticky window (always-on-top)        │
-│   plan finder adapters · repo reader (git) · clipboard · keychain      │
-│   brain adapters · local STT (whisper.cpp)                             │
+│   plan finder adapters · touched-file reader · repo reader (git)       │
+│   clipboard · keychain · brain adapters · local STT (whisper.cpp)      │
 └────────────────────────────────────────────────────────────────────────┘
       │                                   │
  ~/.claude/plans, ~/.cursor/plans,    brains: claude (headless) · Copilot SDK ·
  ~/.codex/sessions, current repo      Cursor CLI · APIs · Ollama
 ```
 
-- **Tauri 2** keeps the app small and native. It supplies the tray/menu bar
-  icon, an optional always-on-top transparent window for sticky mode, and a
-  global-shortcut plugin.
-- The **Rust core** handles OS-level work: the hotkey, windows, reading agent
-  files, git, the keychain, on-device speech-to-text, and running brains.
-- The **TypeScript UI** owns the conversation: it builds prompts, renders
-  streamed replies, and shows comparisons.
+- **Tauri 2** keeps the app small and native. It provides the tray and menu
+  bar icon, an optional always-on-top transparent window for sticky mode,
+  and a global-shortcut plugin.
+- **The Rust core** does the OS-level work:
+  - the hotkey and windows,
+  - reading agent files, touched files and git,
+  - the keychain,
+  - on-device speech-to-text,
+  - running brains.
+- **The TypeScript UI** owns the session. It runs the breakdown, the
+  talk-through and the agent note, and renders the decision list,
+  side-by-side views and streamed replies.
 
 ### 6.2 Plan finder
 
@@ -297,20 +367,55 @@ interface PlanSource {
 }
 ```
 
-- **Claude Code:** read `*.md` in the plans directory. That is `~/.claude/plans/`
-  by default, or `plansDirectory` from user or project settings. Also scan
-  recent session transcripts for a plan that hasn't been saved.
+- **Claude Code:** read `*.md` in the plans directory (the default
+  `~/.claude/plans/`, or `plansDirectory` from user or project settings).
+  Also scan recent session transcripts for a plan that hasn't been saved.
 - **Cursor:** read `~/.cursor/plans/*.plan.md` and any `*.plan.md` in the
   current workspace.
-- **Codex:** read recent `rollout-*.jsonl` under `~/.codex/sessions/YYYY/MM/DD/`.
-  From each, extract the latest proposed plan (the plan-tool output or the
-  last long assistant message) and the session's working directory.
+- **Codex:** read recent `rollout-*.jsonl` under
+  `~/.codex/sessions/YYYY/MM/DD/`. Extract the latest proposed plan (the
+  plan-tool output or the last long assistant message) and the session's
+  working directory.
 
-The finder runs only when Frank is summoned. It asks each adapter for items
-newer than the window, groups them by project, merges near-duplicates, and
-sorts by recency. Adapters are read-only and fail independently.
+The finder runs only on summon. It picks the most recent plan for the
+current project and keeps the others one click away. The touched-file reader
+then extracts repo paths mentioned in the plan and reads those files within
+the size budget. The biggest files are trimmed first, keeping their
+signatures and outlines.
 
-### 6.3 Brains
+### 6.3 Session engine
+
+A session has three steps, each a call to the brain:
+
+1. **Breakdown.** Frank sends the plan, the repo summary and the touched
+   files, and asks for the decision points as a small JSON list following
+   the `Decision` shape, ranked by undo cost and capped at five.
+   - API brains use structured output where the provider supports it.
+   - Agent-backed brains are asked for JSON. The output is validated and
+     repaired once if it's malformed.
+   - If repair fails, Frank falls back to a plain-text numbered list, so the
+     session never stalls.
+2. **Talk-through.** A conversational loop, one decision at a time. The
+   system prompt defines Frank's behaviour:
+   - Listen first, and keep replies to a few sentences.
+   - Ask at most one question per turn.
+   - Show the options side by side.
+   - Cite code evidence with its file.
+   - Be honest and never flatter.
+   - When asked, give a clear recommendation, with reasons and what would
+     change it.
+
+   Each decision's outcome (keep, change or drop, plus detail) is recorded
+   as the user settles it.
+3. **Agent note.** Frank composes a short note from the recorded outcomes,
+   written for the agent to act on: what to keep, what to change, what to
+   drop. It shows the note for a final look, then copies it.
+
+**Context budget.** The plan comes first, then evidence from touched files,
+then the repo summary. When the budget is tight, touched files shrink to
+their relevant sections.
+
+### 6.4 Brains
 
 One interface covers every brain:
 
@@ -330,67 +435,52 @@ environment.
 vendor's own supported surface:
 
 - **Claude Code.** Frank runs the user's installed `claude` binary in
-  headless (print) mode, with streaming output. The prompt and context go in
+  headless (print) mode with streaming output. The prompt and context go in
   on stdin, and all tools are disabled so the run is answer-only. The user
-  signs in inside Claude Code; Frank never reads or passes on that login.
+  signs in inside Claude Code, and Frank never reads or passes on that
+  login.
 - **GitHub Copilot.** Frank uses the official Copilot SDK. The user signs in
   with GitHub, and each prompt counts toward their Copilot allowance. Copilot
   Free works too.
 - **Cursor.** Frank runs the Cursor CLI in headless (print) mode, which uses
-  the user's Cursor subscription. Answers only; changes are never applied.
+  the user's Cursor subscription. It returns answers only, and no changes
+  are applied.
 
-**Rules for agent-backed brains.** These follow the vendors' published terms
-and hold for every agent:
+**Rules for agent-backed brains** (these follow the vendors' published
+terms):
 
 - Run the official binary or SDK unmodified.
-- Never collect, store or pass on the user's credentials; sign-in always
-  happens through the vendor's own flow.
+- Never collect, store or pass on the user's credentials. Sign-in always goes
+  through the vendor's own flow.
 - Run in the user's own session, billed to the user's own plan. Frank never
   resells or pools usage.
-- Answers only: no file edits, no shell commands, no other tools.
+- Answer-only: no file edits, no shell commands, no tools. Frank gathers the
+  code context himself.
 
 **Latency.** Spawning a CLI adds startup time, so Frank starts the chosen
-agent's process when the panel opens, while the user is still typing. Where
-the CLI supports keeping a process alive, Frank reuses it within a session.
-
-### 6.4 Conversation engine
-
-- **Prompt.** A short system prompt defines Frank's behaviour:
-  - Listen first and keep replies to a few sentences.
-  - Ask at most one question per turn.
-  - Compare options on the dimensions that matter.
-  - Be honest and never flatter.
-  - When asked, give a clear recommendation, with reasons and what would
-    change it.
-
-  The confirmed context (plans, repo summary, extras) goes in as labelled
-  blocks.
-- **Context budget.** Plans are trimmed to fit the brain's context window,
-  keeping headings and steps before details. Repo context is a compact
-  summary (branch, changed file list, rules files), not file contents, unless
-  the user adds a file.
-- **Comparison view.** With two or more plans, the engine asks the brain for
-  a small table (options × 3–4 dimensions). The panel renders it, with plain
-  text as the fallback.
-- **Streaming everywhere.** Sessions are held in memory, and history is saved
-  from M4.
+agent's process when the panel opens and runs the breakdown while the user
+is reading the plan summary. Where a CLI can keep a process alive, Frank
+reuses it within the session.
 
 ### 6.5 Voice
 
 Push-to-talk only: hold the hotkey to record, release to transcribe. Speech
 is transcribed on-device with whisper.cpp, or Apple's speech framework on
-macOS, then sent as a normal message. There is no always-on microphone and
+macOS, then sent as a normal message. The microphone is never always on, and
 Frank doesn't speak his replies in the first versions.
 
 ### 6.6 Privacy and security
 
-- Frank reads only on summon, and only from the known agent directories, the
-  current repo, and anything the user adds.
+- Frank reads only on summon, and only from:
+  - the known agent directories,
+  - the current repo summary,
+  - the files the plan mentions,
+  - anything the user adds.
 - The user sees and confirms the context before it's sent.
 - Context goes only to the chosen brain. With Ollama, nothing leaves the
   machine.
-- Common secret patterns are stripped before sending. This is best-effort and
-  documented as such.
+- Common secret patterns are stripped before sending. This is best-effort,
+  and documented as such. Files like `.env` are never read as touched files.
 - Agent credentials stay with the agents. Frank's own API keys live in the
   keychain. There is no telemetry.
 
@@ -398,40 +488,42 @@ Frank doesn't speak his replies in the first versions.
 
 ## 7. Work plan
 
-### M1 — The duck you can talk to
+### M1 — Talk through a plan
 
-- Tauri app with the menu bar icon, global hotkey and panel.
-- Sticky mode, off by default.
-- Typed conversation.
+- The Tauri app: menu bar icon, global hotkey and panel.
+- Sticky mode (off by default).
+- Paste or drop a plan.
+- The session: breakdown, touched-file checks, talk-through and the agent
+  note.
 - Brains: Claude Code (headless), API keys and Ollama, with auto-detection.
-- Context from the clipboard and dropped files.
-- The comparison view, recommendations on request, and copy on done.
 - macOS first.
 
-**Exit:** a Claude Code user summons Frank, pastes two plans, and gets a clear
-comparison and recommendation in under a minute, with no new API key.
+**Exit:** a Claude Code user pastes a plan. Frank surfaces its key calls,
+catches at least one assumption the code contradicts in test plans, and
+produces an agent note. It all takes under three minutes, with no new API
+key.
 
-### M2 — He finds the plans, on more subscriptions
+### M2 — He finds the plan, on more subscriptions
 
 - Plan-finder adapters for Claude Code, Cursor and Codex.
-- Project grouping and repo context.
-- A "found N plans, use these?" confirmation.
+- Project detection and repo context.
+- One-click plan switching.
 - Copilot SDK and Cursor CLI brains.
 
-**Exit:** right after an agent writes a plan, summoning Frank shows that plan
-with no copy-pasting, using any of the supported brains.
+**Exit:** right after an agent writes a plan, summoning Frank opens it with
+its key calls listed, with no copy-pasting, on any supported brain.
 
 ### M3 — Talk to him
 
 Push-to-talk with on-device transcription.
 
-**Exit:** hold the hotkey and say "help me pick between these." The session
-starts with the found plans.
+**Exit:** hold the hotkey, say "walk me through this plan," and the session
+starts on the found plan.
 
 ### M4 — Close the loop
 
+- Hand the agent note straight back to the agent.
 - Optional session history.
-- Hand the chosen plan back to the agent.
 - Windows and Linux builds.
 - More adapters, such as Copilot CLI, Gemini CLI and Cline, contributed as
   small modules.
@@ -443,42 +535,50 @@ systems.
 
 ## 8. Risks and open questions
 
-- **Vendor terms can change.** Anthropic prohibits third-party apps from using
-  Claude.ai subscription logins directly. Frank's Claude path relies on
-  running the user's own unmodified Claude Code, which the published terms
-  describe as permitted. Before release, confirm this with Anthropic, and
-  review the Copilot and Cursor terms too. Brain adapters are isolated, so
-  any one path can be dropped without affecting the rest.
+- **Breakdown quality.** Frank might miss an important silent choice, or flag
+  trivial ones.
+  - Build a test set of real agent plans with their key calls labelled by
+    developers.
+  - Measure recall of the important calls and the noise rate per brain.
+  - Keep the list capped at five.
+- **Vendor terms can change.** Anthropic prohibits third-party apps from
+  using Claude.ai subscription logins directly.
+  - Frank's Claude path relies on running the user's own unmodified Claude
+    Code, which Anthropic's published terms describe as permitted. Confirm
+    this with Anthropic before release.
+  - Review the Copilot and Cursor terms too.
+  - Brain adapters are isolated, so any one path can be dropped.
 - **Agent file formats change.** Plan locations and transcript formats aren't
   public APIs. Mitigation: isolated adapters, fixture tests per agent
   version, and graceful skipping.
 - **Claude Code deletes old data.** Its cleanup (30 days by default) removes
-  old plan files. Recent plans are fine, but Frank can't rely on agent
-  directories for history.
+  old plan files. That's fine for recent plans, but Frank can't rely on
+  agent directories for history.
 - **Agent brains are slower.** CLI startup adds latency. Mitigation: warm the
-  process on summon, and show a thinking state immediately.
+  process on summon, run the breakdown while the user reads, and show a
+  thinking state straight away.
 - **Usage limits.** Frank's sessions count toward the user's plan limits.
-  Sessions are short by design. Frank shows which brain he's using, so usage
-  is never a surprise.
-- **Picking the right project.** Recency is a good guess but won't always be
-  right; the one-click project switcher is the fallback.
-- **Model quality varies.** Small local models may compare plans poorly. The
-  docs recommend models, and settings flag weaker ones.
+  Sessions are short by design, and Frank shows which brain he's using.
+- **Model quality varies.** Small local models may produce weak breakdowns.
+  The docs recommend models, and settings flag weaker ones.
 - **Sticky etiquette.** Sticky Frank must never cover what the user is working
-  on, so he needs easy hiding and a position that stays put. That's also why
-  sticky mode is off by default.
+  on. He needs easy hiding and a stable position, which is also why sticky
+  mode is off by default.
 - **Name.** A few small agent-tooling projects already use "frank". Check the
   trademark and package-name availability before release.
 
 ## 9. How we'll know it works
 
-- **Time to choice:** median time from summon to "done" (target: under 2
+- **Calls changed:** share of sessions where the user changes or drops at
+  least one of the plan's choices. This is the core sign that Frank catches
+  what matters.
+- **Assumption catches:** share of sessions where a flagged assumption turned
+  out to be real (the user acted on it).
+- **Time to note:** median time from summon to agent note (target: under 3
   minutes).
-- **No-paste rate:** share of sessions where the plans came from the plan
+- **No-paste rate:** share of sessions where the plan came from the plan
   finder rather than pasting.
-- **No-new-bill rate:** share of users running Frank on a subscription they
-  already had.
 - **Coming back:** people still summoning Frank after 4 weeks.
-- **Honesty check:** a small set of scripted sessions run per brain, checking
-  that Frank stays brief, asks at most one question per turn, and doesn't just
-  agree with the user's preferred option.
+- **Quality checks per brain:** a scripted set of real plans, checking
+  breakdown recall and noise, brevity, one question per turn, and that Frank
+  doesn't simply agree with whichever choice the user leans toward.

@@ -4,12 +4,14 @@
 
 Meet Frank. He's a duck, and he's frank.
 
-Your agent just gave you three plans and you can't pick one. Or you've been
-stuck on the same bug for an hour. Press a hotkey and Frank pops up. Talk it
-through or type it out. Frank already knows what you're looking at: he finds
-the plans your agents just wrote and reads the repo you're in, so you don't
-have to paste anything. He listens, asks the question you needed, lays out the
-trade-offs, and helps you pick the best option. Then he gets out of your way.
+Your agent just handed you a plan. Somewhere in it are the calls that matter:
+the options it laid out, and the choices it made without asking, like a new
+dependency, a schema change, or "apply it everywhere." You're not sure which
+ones are right. Press a hotkey and Frank pops up with the plan already loaded.
+He points out the calls worth a second look, checks them against your actual
+code, talks each one through with you, and helps you land on the right
+answer. Then he hands your decisions back to your agent and gets out of your
+way.
 
 Open source. Runs on your machine. Works with the AI subscription you already
 have.
@@ -20,16 +22,22 @@ have.
 
 1. **Summon him.** Press `⌥ Space` (you can change it) or click Frank in your
    menu bar. Hold the key to talk, or just type.
-2. **He finds the context.** Frank picks up the plans your coding agents wrote
-   recently, your current repo (branch and changed files) and, if you want,
-   your clipboard. He shows what he found and you confirm with one key.
-3. **He talks it through with you.** He listens first, then asks one short
-   question at a time and puts the options side by side so the differences
-   are obvious.
-4. **He helps you choose.** Ask *"which would you pick?"* at any point and
-   you get a straight answer with reasons.
-5. **Back to work.** Your choice and the chosen plan are copied, ready to
-   hand to your agent. Frank tucks himself away.
+2. **He finds the plan.** Frank picks up the plan your coding agent just
+   wrote, along with your repo and the files the plan touches. You don't
+   paste anything.
+3. **He spots the calls that matter.** He lists the few decisions in the plan
+   worth a second look, hardest to undo first:
+   - options the plan offers,
+   - choices it made quietly,
+   - assumptions that might not hold in your code.
+4. **He talks them through with you.** One at a time: the options side by
+   side, one good question, and checks against your code. Ask *"what would
+   you do?"* and you get a straight answer with reasons.
+5. **Back to work.** Frank writes a short note with your decisions, ready to
+   paste to your agent, and tucks himself away.
+
+Also good for: comparing two plans, sanity-checking an idea before you ask
+your agent, or just the bug you've been stuck on for an hour.
 
 ### Sticky mode
 
@@ -40,26 +48,37 @@ in a corner, always on top, and you can drag him wherever you like.
 ## What it looks like
 
 ```
-You  ⌥ Space  "ugh, I can't decide between these"
+You  ⌥ Space  "not sure about this plan"
 
-🦆  Found 2 plans from the last 10 minutes in my-app/:
-    · Claude Code: "Add rate limiting with a token bucket in middleware"
-    · Cursor:      "Add Redis-backed rate limiting per route"
-    Use these?  [Enter]
+🦆  Claude Code's plan from 3 min ago: "Add rate limiting to the API"
+    Three calls worth a look:
+    1. Store counts in Redis        (plan's choice; alternative: in memory)
+    2. Apply to every route         (plan's choice; alternative: /api/public only)
+    3. Add express-rate-limit       (new dependency)
+    Start with 1?
 
-🦆  Quick comparison:
-                  Claude Code plan       Cursor plan
-    Undo later    easy                   harder (new service)
-    Effort        about 1 file           Redis + config + ops
-    Scales to     one instance           many instances
+You  "yeah"
 
-    One question: are you running more than one instance?
+🦆  Redis vs in memory:
+                  Redis                   In memory
+    Undo later    harder (new service)    easy
+    Effort        Redis + config + ops    about 1 file
+    Works for     many instances          one instance
 
-You  "no, just one for now"
+    Also: I don't see Redis anywhere in your repo or docker-compose.
+    Are you running more than one instance?
 
-🦆  Then the Claude Code plan. It's smaller, easy to undo, and fits
-    what you have today. Move to Redis when you add a second instance.
-    Copied the plan and a one-line summary. Go ship. 🦆
+You  "no, just one"
+
+🦆  Then in memory. The plan's Redis choice solves a problem you don't
+    have yet. Next, every route: your /health check is on that list...
+
+    ...
+
+🦆  Note for your agent (copied):
+    "Go ahead with these changes: in-memory counters instead of Redis;
+     only /api/public, not /health; keep express-rate-limit."
+    Go ship. 🦆
 ```
 
 ## Use the subscription you already have
@@ -88,34 +107,37 @@ commands through your agent.
 | Codex CLI | Recent sessions in `~/.codex/sessions/` |
 | Anything else | Your clipboard, a selected file, or text you drop on Frank |
 
-Frank only looks when you summon him, and only shows plans from the last
-little while, grouped by project. More agents can be added as small adapters.
+Frank only looks when you summon him. He opens the most recent plan for the
+project you're in, and you can switch to another in one click. More agents
+can be added as small adapters.
 
 ## Principles
 
-- **He only speaks when you call him.** No pop-ups and no watching your
+- **He only speaks when you call him.** No pop-ups, and no watching your
   screen.
-- **He listens first,** then keeps things short: one question at a time.
-- **He's frank.** It's in the name. He tells you when a plan is worse, even
-  the one you like.
+- **He listens first,** then keeps things short: a few calls, and one
+  question at a time.
+- **He's frank.** It's in the name. He tells you when the plan's choice is
+  wrong, and when yours is.
 - **You decide.** When you ask, he recommends and explains why.
 
 ## How is Frank different from Copilot's Rubber Duck?
 
 [GitHub Copilot's Rubber Duck](https://docs.github.com/en/copilot/concepts/agents/copilot-cli/rubber-duck)
-makes your **agent's** plan better. Frank helps **you** choose between plans.
+reviews your **agent's** work. Frank helps **you** make the calls inside the
+plan.
 
 | | Copilot's Rubber Duck | Frank |
 | --- | --- | --- |
 | **Helps** | The agent: a second model reviews the agent's work | You: a duck you talk to when you're overwhelmed |
 | **Runs** | Automatically, at checkpoints in a Copilot session | When you call him, from anywhere |
-| **Gives you** | A list of concerns the agent uses to fix its work | A side-by-side comparison, one good question, and a straight recommendation |
-| **Scope** | One Copilot session | Plans from Claude Code, Cursor and Codex, side by side |
+| **Gives you** | A list of concerns the agent uses to fix its work | The plan's key decisions, talked through one by one, with a straight recommendation and a note for your agent |
+| **Scope** | One Copilot session | The plan in front of you, from any agent |
 | **Beyond plans** | Reviewing the agent's work | Any stuck moment, like the bug you've been on for an hour |
 | **Runs on** | Copilot | Your Claude Code, Copilot or Cursor subscription, an API key, or a local model |
 
-They work well together. Rubber Duck improves each agent's plan, and Frank
-helps you pick between the improved plans.
+They work well together. Rubber Duck makes the agent's plan better, and
+Frank makes sure the calls in it are the ones you'd make.
 
 ## Privacy
 
