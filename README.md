@@ -1,9 +1,11 @@
-# 🦆 Mallard
+# 🦆 Frank
 
 **A duck on your screen you can talk to when you're overwhelmed.**
 
+Meet Frank. He's a duck, and he's frank.
+
 Your agent just gave you three plans and you can't pick one. Or you've been
-stuck on the same bug for an hour. Press a hotkey and the duck is there. Talk
+stuck on the same bug for an hour. Press a hotkey and Frank is there. Talk
 it through or type it out. The duck already knows what you're looking at: it
 finds the plans your agents just wrote and reads the repo you're in, so you
 don't have to paste anything. It listens, asks the question you needed, lays
@@ -79,7 +81,8 @@ The duck needs a model to think with, and it can use the one you already have:
 
 - **It only speaks when you call it.** No pop-ups, and no watching your screen.
 - **It listens first,** then keeps things short: one question at a time.
-- **It's honest.** It tells you when a plan is worse, even the one you like.
+- **It's frank.** It's in the name. It tells you when a plan is worse, even
+  the one you like.
 - **You decide.** When you ask, it recommends and explains why.
 
 ## Privacy
