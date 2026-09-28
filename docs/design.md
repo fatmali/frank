@@ -8,6 +8,8 @@ one through with you, and hands your decisions back to the agent. He runs on
 the AI subscription you already have.
 
 - **Product overview:** [../README.md](../README.md)
+- **UX and design system:** [ux.md](ux.md)
+- **M1 build plan:** [m1-plan.md](m1-plan.md)
 - **This doc:** requirements, data model, architecture and work plan.
 
 Priority tags: **[M1]**–**[M4]** refer to the milestones in §7.
@@ -68,7 +70,7 @@ Cursor, an API key, or a local model.
 ## 2. User flow
 
 ```
- ⌥ Space ─▶ plan loaded ─▶ key calls listed ─▶ talk through each ─▶ note for your agent
+ ⌥⇧Space ─▶ plan loaded ─▶ key calls listed ─▶ talk through each ─▶ note for your agent
   (hold to talk,  (latest plan in this       (options, silent choices,  (options, one question,  (copied, ready
    or type)        project + touched files)   assumptions; ranked)       code check, verdict)     to paste)
 ```
@@ -79,7 +81,7 @@ Cursor, an API key, or a local model.
 2. **Plan.** Frank loads the most recent plan for the current project, plus
    the repo summary and the files the plan mentions. One click switches to a
    different recent plan or adds context such as a file or the clipboard.
-3. **Key calls.** Frank lists up to five decision points, hardest to undo
+3. **Key calls.** Frank lists up to five calls, hardest to undo
    first. For each one he shows what the plan chose and the alternative. The
    user picks where to start, or says "all fine" for any of them.
 4. **Talk it through.** For each call, Frank shows the options side by side,
@@ -105,7 +107,7 @@ Other sessions follow the same shape:
 
 - **FR-1 [M1]** By default Frank lives in the menu bar (macOS) or the system
   tray (Windows, Linux) and is out of sight until summoned.
-- **FR-2 [M1]** A global hotkey (default `⌥ Space`, configurable) opens and
+- **FR-2 [M1]** A global hotkey (default `⌥⇧Space`, recorded on first run) opens and
   closes the panel from any app.
 - **FR-3 [M1]** **Sticky mode, off by default.** When it's on, Frank sits on
   screen, always on top. He's draggable, remembers his position, and can be
@@ -124,16 +126,16 @@ Other sessions follow the same shape:
 
 ### 3.3 Finding the plan
 
-- **FR-8 [M2]** **Plan finder.** On summon, Frank finds recent plans from
+- **FR-8 [M1: Claude Code; M2: others]** **Plan finder.** On summon, Frank finds recent plans from
   supported coding agents (by default, the last 30 minutes). He opens the
   most recent plan for the current project, and one click switches to
   another.
-- **FR-9 [M2]** Supported sources at launch:
+- **FR-9 [M1: Claude Code; M2: others]** Supported sources:
   - Claude Code plan files in `~/.claude/plans/` (or the `plansDirectory`
     setting) and recent sessions.
   - Cursor plan files in `~/.cursor/plans/` and plans saved in the workspace.
   - Codex CLI sessions in `~/.codex/sessions/`.
-- **FR-10 [M2]** Repo context: Frank detects the current project (§5.4) and
+- **FR-10 [M1]** Repo context: Frank detects the current project (§5.4) and
   includes the branch, changed files, and rules files (`AGENTS.md`,
   `CLAUDE.md`).
 - **FR-11 [M1]** **Touched files.** Frank reads the files the plan
@@ -146,16 +148,16 @@ Other sessions follow the same shape:
 
 ### 3.4 Breaking down the plan
 
-- **FR-14 [M1]** Frank extracts the plan's **decision points**:
+- **FR-14 [M1]** Frank extracts the plan's **calls** (the decisions inside it):
   - **Options:** alternatives the plan names ("Redis or in memory").
   - **Silent choices:** consequential choices made without asking, such as
     new dependencies, new services, schema or data migrations, public API
     changes, deletions, and scope ("every route").
   - **Assumptions:** things the plan relies on that the code might not
     support ("Redis is available").
-- **FR-15 [M1]** Decision points are ranked with the hardest to undo first.
+- **FR-15 [M1]** Calls are ranked with the hardest to undo first.
   At most five are shown, and trivial ones are left out.
-- **FR-16 [M1]** For each decision point, Frank shows what the plan chose, the
+- **FR-16 [M1]** For each call, Frank shows what the plan chose, the
   realistic alternative(s), and any evidence from the code, with the file it
   came from.
 - **FR-17 [M1]** Frank flags assumptions the code contradicts or doesn't
@@ -198,7 +200,7 @@ Other sessions follow the same shape:
   | Claude Code (Pro, Max or API) | Runs the user's installed `claude` in headless mode | M1 |
   | API key: Anthropic, OpenAI, OpenAI-compatible | Direct API calls | M1 |
   | Local model | Ollama | M1 |
-  | GitHub Copilot (any plan, including Free) | Official Copilot SDK | M2 |
+  | GitHub Copilot (any plan, including Free) | Official Copilot SDK | M1 |
   | Cursor | Cursor CLI in headless mode | M2 |
 
 - **FR-28 [M1]** On first run, Frank detects installed agent CLIs,
@@ -267,7 +269,7 @@ from `config.toml`. Agent credentials stay with the agents.
 | `brain.kind` | chosen on first run | `claude-code` \| `copilot` \| `cursor` \| `anthropic` \| `openai` \| `openai-compatible` \| `ollama` |
 | `brain.model` | brain's default | Optional model override where the brain supports it |
 | `brain.base_url` | none | For OpenAI-compatible endpoints or Ollama |
-| `hotkey` | `Alt+Space` | Global shortcut |
+| `hotkey` | `Alt+Shift+Space` | Global shortcut, recorded on first run |
 | `sticky.enabled` | `false` | Sticky mode: Frank always on screen |
 | `sticky.position` | bottom-right | Last dragged position (sticky mode) |
 | `plans.window_minutes` | `30` | How far back the plan finder looks |
@@ -287,7 +289,7 @@ type Plan = {
   touchedFiles: string[]; // repo paths the plan mentions
 };
 
-type Decision = {
+type Call = {
   title: string;                                // "Where to store counts"
   kind: 'option' | 'silent-choice' | 'assumption';
   planChoice: string;                           // what the plan does
@@ -302,7 +304,7 @@ type Session = {
   brain: string;          // e.g. 'claude-code'
   plan?: Plan;
   context: { repo?: RepoInfo; extras: string[] };
-  decisions: Decision[];
+  calls: Call[];
   messages: { role: 'user' | 'frank'; text: string }[];
   agentNote?: string;     // the note handed back to the agent
 };
@@ -389,8 +391,8 @@ signatures and outlines.
 A session has three steps, each a call to the brain:
 
 1. **Breakdown.** Frank sends the plan, the repo summary and the touched
-   files, and asks for the decision points as a small JSON list following
-   the `Decision` shape, ranked by undo cost and capped at five.
+   files, and asks for the calls as a small JSON list following
+   the `Call` shape, ranked by undo cost and capped at five.
    - API brains use structured output where the provider supports it.
    - Agent-backed brains are asked for JSON. The output is validated and
      repaired once if it's malformed.
@@ -491,25 +493,32 @@ Frank doesn't speak his replies in the first versions.
 
 ### M1 — Talk through a plan
 
+The detailed task list is in [m1-plan.md](m1-plan.md).
+
 - The Tauri app: menu bar icon, global hotkey and panel.
 - Sticky mode (off by default).
-- Paste or drop a plan.
+- Plans: the latest Claude Code plan found automatically, or pasted or
+  dropped.
 - The session: breakdown, touched-file checks, talk-through and the agent
   note.
-- Brains: Claude Code (headless), API keys and Ollama, with auto-detection.
+- Brains, with auto-detection:
+  - Claude Code (headless);
+  - GitHub Copilot (Copilot SDK);
+  - API keys;
+  - Ollama.
 - macOS first.
 
-**Exit:** a Claude Code user pastes a plan. Frank surfaces its key calls,
-catches at least one assumption the code contradicts in test plans, and
-produces an agent note. It all takes under three minutes, with no new API
-key.
+**Exit:** a Claude Code or Copilot user presses the hotkey after a plan.
+Frank surfaces its key calls, catches at least one assumption the code
+contradicts in test plans, and produces an agent note. It all takes under
+three minutes, with no new API key.
 
-### M2 — He finds the plan, on more subscriptions
+### M2 — He finds every plan, on more subscriptions
 
-- Plan-finder adapters for Claude Code, Cursor and Codex.
+- Plan-finder adapters for Cursor and Codex.
 - Project detection and repo context.
 - One-click plan switching.
-- Copilot SDK and Cursor CLI brains.
+- The Cursor CLI brain.
 
 **Exit:** right after an agent writes a plan, summoning Frank opens it with
 its key calls listed, with no copy-pasting, on any supported brain.

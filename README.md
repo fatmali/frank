@@ -42,7 +42,7 @@ for, because you don't need another one.
 
 ## How it works
 
-1. **Summon him.** Press `⌥ Space`, or click Frank in your menu bar. Hold
+1. **Summon him.** Press `⌥⇧Space` (or your own hotkey), or click Frank in your menu bar. Hold
    the key to talk, or type if you're in an open-plan office and have some
    dignity left.
 2. **He finds the plan.** Frank grabs the plan your agent just wrote, plus
@@ -69,7 +69,7 @@ yourself you're "close."
 ## A typical Frank session
 
 ```
-You  ⌥ Space  "not sure about this plan"
+You  ⌥⇧Space  "not sure about this plan"
 
  __
 (o )>  Claude Code's plan from 3 min ago: "Add rate limiting to the API"
@@ -265,16 +265,20 @@ which case he's just... there. Watching. You asked for this.)
 
 ```
      .--.
-    /    \      Frank hasn't hatched yet.
-   |      |     This repo is the design: the full spec is in
-    \    /      docs/design.md. The code comes next.
+    /  , \      Frank is hatching. M1 is under way.
+   |  /   |
+    \/   /
      '--'
 ```
+
+- [docs/design.md](docs/design.md): what Frank does and how it's built
+- [docs/ux.md](docs/ux.md): how Frank looks, sounds and behaves
+- [docs/m1-plan.md](docs/m1-plan.md): the M1 work plan, task by task
 
 Ideas, pushback and bug reports for things that don't exist yet are all
 welcome. Frank would want it that way. Frankly.
 
 ## License
 
-Open source. The license gets picked before the first release. Frank has
-opinions.
+[MIT](LICENSE). Do what you like with it. Frank will have opinions, but he
+won't sue.
