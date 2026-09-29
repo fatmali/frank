@@ -135,7 +135,7 @@ fn core_text(raw: &str) -> String {
         );
     }
     if raw.contains('.') {
-        let prefix = raw.starts_with('.').then_some("dot ").unwrap_or("");
+        let prefix = if raw.starts_with('.') { "dot " } else { "" };
         let body = raw.strip_prefix('.').unwrap_or(raw);
         return format!(
             "{prefix}{}",
