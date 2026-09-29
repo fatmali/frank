@@ -6,6 +6,8 @@
 //! the brain notices on its next send and stops (child processes are killed).
 
 pub mod claude_code;
+#[cfg(feature = "copilot")]
+pub mod copilot;
 
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;

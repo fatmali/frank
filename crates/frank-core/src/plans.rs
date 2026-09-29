@@ -54,7 +54,7 @@ pub fn recent_claude_plans(claude_dir: &Path, window: Duration) -> Vec<Plan> {
         .filter_map(|p| Some((p.metadata().ok()?.modified().ok()?, p)))
         .filter(|(m, _)| *m >= cutoff)
         .collect();
-    files.sort_by(|a, b| b.0.cmp(&a.0));
+    files.sort_by_key(|f| std::cmp::Reverse(f.0));
 
     let transcripts = recent_transcripts(claude_dir, window);
     files
@@ -98,7 +98,7 @@ fn recent_transcripts(claude_dir: &Path, window: Duration) -> Vec<PathBuf> {
         .filter_map(|p| Some((p.metadata().ok()?.modified().ok()?, p)))
         .filter(|(m, _)| *m >= cutoff)
         .collect();
-    found.sort_by(|a, b| b.0.cmp(&a.0));
+    found.sort_by_key(|f| std::cmp::Reverse(f.0));
     found
         .into_iter()
         .take(MAX_TRANSCRIPTS)

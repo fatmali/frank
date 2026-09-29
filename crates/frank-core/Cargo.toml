@@ -8,7 +8,13 @@ repository.workspace = true
 rust-version.workspace = true
 publish = false
 
+[features]
+default = ["copilot"]
+# The GitHub Copilot brain. Pulls in the official SDK.
+copilot = ["dep:github-copilot-sdk"]
+
 [dependencies]
+github-copilot-sdk = { version = "1.0.15", optional = true }
 async-trait = "0.1"
 dirs = "6"
 regex = "1"
