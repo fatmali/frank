@@ -1,29 +1,41 @@
 import { useEffect, useState } from 'react';
-import type { Config, SystemVoice, TalkBack } from '../host.ts';
+import type { Config, TalkBack, VoiceChoice } from '../host.ts';
 import { BrainList } from './BrainList.tsx';
 import { HotkeyRecorder } from './HotkeyRecorder.tsx';
 import { Kbd } from './Kbd.tsx';
 import { useController, usePanel } from './store.ts';
 
 const WINDOWS = [15, 30, 60, 120, 240];
+/** The natural-voice pack, roughly (packs.rs). */
+const NATURAL_MB = 212;
 
 /** Brain, hotkey, sticky mode, how far back to look for plans, and trusted projects. */
 export function Settings() {
   const c = useController();
-  const { config } = usePanel();
+  const { config, downloads } = usePanel();
   const [draft, setDraft] = useState<Config | undefined>(config);
   const [hotkeyError, setHotkeyError] = useState<string | null>(null);
-  const [voices, setVoices] = useState<SystemVoice[]>([]);
+  const [voices, setVoices] = useState<VoiceChoice[]>([]);
+  const downloadingVoices = downloads.voices;
   useEffect(() => {
-    void c.host.listVoices().then(setVoices);
-  }, [c]);
+    // Again when the natural voices finish downloading.
+    if (downloadingVoices === undefined) void c.host.listVoices().then(setVoices);
+  }, [c, downloadingVoices]);
 
   useEffect(() => setDraft(config), [config]);
   useEffect(() => {
     void c.host.hotkeyStatus().then(setHotkeyError);
   }, [c]);
   if (!draft) return null;
-  const best = voices[0];
+  const natural = voices.filter((v) => v.kind === 'natural');
+  const system = voices.filter((v) => v.kind === 'system');
+  const naturalReady = natural.some((v) => v.installed);
+  // What speaks when nothing is chosen: the first natural voice once
+  // they're downloaded, else the best macOS voice.
+  const fallback = naturalReady ? natural[0] : system[0];
+  const chosen = draft.voice?.name || fallback?.id || '';
+  const setVoice = (name: string) =>
+    void save({ ...draft, voice: { ...draft.voice, name } });
 
   const save = async (next: Config) => {
     setDraft(next);
@@ -131,44 +143,89 @@ export function Settings() {
             <option value="never">never</option>
           </select>
         </label>
-        <div className="inline-field">
-          <label htmlFor="voice-name">His voice</label>
-          <select
-            id="voice-name"
-            value={draft.voice?.name ?? ''}
-            onChange={(e) =>
-              void save({ ...draft, voice: { ...draft.voice, name: e.target.value } })
-            }
-          >
-            <option value="">
-              {best ? `Best installed: ${best.name}` : 'The system voice'}
-            </option>
-            {voices.map((v) => (
-              <option key={v.name} value={v.name}>
-                {v.name}
-              </option>
+        <fieldset className="voice-picker">
+          <legend>His voice</legend>
+          {natural.map((v) => (
+            <div key={v.id} className="voice-row">
+              <label>
+                <input
+                  type="radio"
+                  name="voice"
+                  value={v.id}
+                  disabled={!v.installed}
+                  checked={chosen === v.id}
+                  onChange={() => setVoice(v.id)}
+                />
+                <span>{v.name}</span>
+                <span className="quiet">{v.description}</span>
+              </label>
+              {v.installed && (
+                <button
+                  className="text-button"
+                  onClick={() => void c.host.previewVoice(v.id)}
+                >
+                  Listen
+                </button>
+              )}
+            </div>
+          ))}
+          {!naturalReady &&
+            (downloadingVoices === undefined ? (
+              <div className="voice-download">
+                <p className="quiet">
+                  Natural voices run on this Mac, and sound like a person, not a screen
+                  reader. They're a one-time download.
+                </p>
+                <button className="button" onClick={() => void c.downloadPack('voices')}>
+                  Download natural voices, {NATURAL_MB} MB
+                </button>
+              </div>
+            ) : (
+              <p className="voice-download quiet" role="status">
+                Downloading natural voices, {Math.round(downloadingVoices * 100)}%
+                <span
+                  className="download-bar"
+                  style={{ width: `${downloadingVoices * 100}%` }}
+                />
+              </p>
             ))}
-          </select>
-          <button
-            className="text-button"
-            disabled={!draft.voice?.name && !best}
-            onClick={() =>
-              void c.host.previewVoice(draft.voice?.name || best?.name || '')
-            }
-          >
-            Listen
-          </button>
-        </div>
-        {!voices.some((v) => v.quality !== 'standard') && (
-          <p className="quiet">
-            macOS has natural-sounding voices as a free download: System Settings,
-            Accessibility, Spoken Content, System voice, Manage Voices. Pick an English
-            voice marked Premium, then choose it here.
-          </p>
-        )}
+          <div className="voice-row">
+            <label>
+              <input
+                type="radio"
+                name="voice"
+                checked={chosen.startsWith('system:')}
+                disabled={system.length === 0}
+                onChange={() => setVoice(system[0]?.id ?? '')}
+              />
+              <span>A macOS voice</span>
+            </label>
+            <select
+              aria-label="macOS voice"
+              value={chosen.startsWith('system:') ? chosen : ''}
+              onChange={(e) => setVoice(e.target.value)}
+            >
+              {!chosen.startsWith('system:') && <option value="">Choose</option>}
+              {system.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
+            {chosen.startsWith('system:') && (
+              <button
+                className="text-button"
+                onClick={() => void c.host.previewVoice(chosen)}
+              >
+                Listen
+              </button>
+            )}
+          </div>
+        </fieldset>
         <p className="quiet">
-          Hold the hotkey, or Space in the panel, to talk. Speech is turned into text on
-          this Mac; audio is never saved or sent.
+          Hold the hotkey, or Space in the panel, to talk. Tap Space, or the microphone,
+          to talk freely: Frank hears when you've finished, and listens again after he
+          answers. Speech is turned into text on this Mac; audio is never saved or sent.
         </p>
       </section>
 

@@ -70,6 +70,7 @@ function PanelFrame({ controller: c }: { controller: PanelController }) {
   useEffect(() => {
     let holdTimer: ReturnType<typeof setTimeout> | undefined;
     let talking = false;
+    let tapped = false;
 
     const onKey = (e: KeyboardEvent) => {
       const s = c.getSnapshot();
@@ -110,13 +111,16 @@ function PanelFrame({ controller: c }: { controller: PanelController }) {
       if (s.changing) return;
 
       // Hold Space to talk: the microphone starts after a quarter second.
+      // A tap turns hands-free on or off (on key up).
       if (
         e.key === ' ' &&
         (s.view.name === 'read' || s.view.name === 'call' || s.view.name === 'calls')
       ) {
         e.preventDefault();
         if (!e.repeat && !holdTimer && !talking) {
+          tapped = true;
           holdTimer = setTimeout(() => {
+            tapped = false;
             holdTimer = undefined;
             talking = true;
             void c.startTalking();
@@ -126,9 +130,9 @@ function PanelFrame({ controller: c }: { controller: PanelController }) {
       }
 
       if (e.key === 'Enter') {
-        if (s.voice.state === 'needs-model') {
+        if (s.voice.state === 'needs-pack') {
           e.preventDefault();
-          void c.downloadVoiceModel();
+          void c.downloadPack(s.voice.pack);
         } else if (s.newerPlan) {
           e.preventDefault();
           void c.switchToNewer();
@@ -194,6 +198,10 @@ function PanelFrame({ controller: c }: { controller: PanelController }) {
       if (holdTimer) {
         clearTimeout(holdTimer);
         holdTimer = undefined;
+      }
+      if (tapped) {
+        tapped = false;
+        void c.toggleHandsFree();
       }
       if (talking) {
         talking = false;

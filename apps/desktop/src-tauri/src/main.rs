@@ -4,10 +4,15 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod audio_out;
 mod commands;
+mod g2p;
+mod kokoro;
+mod packs;
 mod shell;
 mod speech;
 mod state;
+mod vad;
 mod voice;
 
 fn main() {
@@ -44,7 +49,10 @@ fn main() {
             commands::set_mood,
             commands::voice_start,
             commands::voice_stop,
-            commands::voice_download_model,
+            commands::download_pack,
+            commands::hands_free_start,
+            commands::hands_free_resume,
+            commands::hands_free_stop,
             commands::speak,
             commands::stop_speaking,
             commands::list_voices,

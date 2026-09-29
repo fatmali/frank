@@ -470,18 +470,33 @@ reuses it within the session.
 
 ### 6.5 Voice
 
-Push-to-talk only: hold the hotkey to record, release to transcribe. The
-microphone starts after a quarter-second hold, so a tap never opens it.
+Two ways to talk. Push-to-talk: hold the hotkey (or `Space` in the panel)
+to record, release to transcribe; the microphone starts after a
+quarter-second hold, so a tap never opens it. Hands-free: tap `Space` or the
+microphone, and Frank follows the conversation himself (ux.md §6.1).
 
-- **Transcription** runs on-device with whisper.cpp (`base.en`, about
-  140 MB, downloaded once with the developer's consent to
-  `~/.frank/models/`). Audio is never saved and never leaves the machine.
+- **Transcription** runs on-device with whisper.cpp (`base.en`). Audio is
+  never saved and never leaves the machine.
+- **Turn-taking** (hands-free) uses Silero VAD v5 (ONNX, 2 MB) on 32 ms
+  frames. After 0.7 s of quiet Whisper transcribes what's there; if it
+  sounds finished (doesn't end on a comma, an ellipsis, or a word like
+  "because", "and", "the") it's sent, else Frank waits until 1.6 s. The
+  microphone is ignored while Frank thinks and talks (half duplex: no echo
+  cancellation needed), then the panel resumes it. It turns itself off
+  after 45 s of nobody talking, and when the panel hides.
+- **Models** come in two packs, each downloaded once with consent:
+  listening (Whisper and Silero, about 150 MB, `~/.frank/models/`) and
+  voices (Kokoro and dictionaries, about 212 MB, `~/.frank/voices/`).
 - **Commands** ("keep it", "option two", "next", "what would you do?") are
   matched on-device against the current call, so they act instantly.
   Everything else goes to the brain as text.
-- **Spoken replies** use the system voice (`say` on macOS): the first two
-  sentences of Frank's reply, only when the developer spoke (configurable).
-  Any key stops him.
+- **Spoken replies**: at most two sentences, each said as soon as it's
+  written, only when the developer spoke (configurable). Any key stops him.
+  Natural voices are Kokoro-82M (fp16 ONNX via onnxruntime, 24 kHz), with
+  Frank's own grapheme-to-phoneme step in Rust: the misaki dictionaries,
+  a developer lexicon (Redis, Postgres, JSON), numbers, acronyms, camelCase
+  and suffixes. About 0.25 s of compute per second of speech on a CPU. The
+  macOS voices (`say`) are the fallback.
 
 ### 6.6 Privacy and security
 
@@ -538,8 +553,9 @@ its key calls listed, with no copy-pasting, on any supported brain.
 
 ### M3 — Talk to him more
 
-Push-to-talk arrived in M1. M3 makes the conversation richer: streaming
-transcription while you talk, choosing Frank's voice, and talking through
+Push-to-talk, hands-free turn-taking and natural voices arrived in M1. M3
+makes the conversation richer: streaming transcription while you talk,
+barge-in by voice (with echo cancellation), and talking through
 problems that aren't plans ("I've been stuck on this bug for an hour").
 
 **Exit:** hold the hotkey, describe a bug out loud, and Frank asks the one

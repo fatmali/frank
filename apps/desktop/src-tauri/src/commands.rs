@@ -1,8 +1,9 @@
 //! What the panel can ask the app to do. Plans, files and brains live in
 //! `frank-core`; these commands only move data across and keep state.
 
+use crate::packs;
 use crate::shell;
-use crate::speech::{self, Speech, SystemVoice};
+use crate::speech::{self, Speech, VoiceChoice};
 use crate::state::{AppState, lock};
 use crate::voice::Voice;
 use frank_core::brain::{BrainError, BrainRequest, Detection};
@@ -324,10 +325,31 @@ pub fn voice_stop(app: AppHandle, voice: State<'_, Voice>) {
     voice.stop(&app);
 }
 
+/// Downloads a voice pack ("listening" or "voices"), after the developer
+/// said yes to it.
 #[tauri::command]
-pub async fn voice_download_model(app: AppHandle, voice: State<'_, Voice>) -> Result<(), ()> {
-    voice.download(&app).await;
+pub async fn download_pack(app: AppHandle, pack: String) -> Result<(), String> {
+    let pack = packs::Pack::parse(&pack).ok_or("unknown pack")?;
+    packs::download(&app, pack).await;
     Ok(())
+}
+
+/// Hands-free conversation: Frank listens until told to stop, and hears for
+/// himself when the developer has finished a thought.
+#[tauri::command]
+pub fn hands_free_start(app: AppHandle, voice: State<'_, Voice>) {
+    voice.hands_free_start(&app);
+}
+
+/// Frank has answered; listen again.
+#[tauri::command]
+pub fn hands_free_resume(app: AppHandle, voice: State<'_, Voice>) {
+    voice.hands_free_resume(&app);
+}
+
+#[tauri::command]
+pub fn hands_free_stop(voice: State<'_, Voice>) {
+    voice.hands_free_stop();
 }
 
 /// Adds a sentence to what Frank is saying.
@@ -341,10 +363,10 @@ pub fn stop_speaking(speech: State<'_, Speech>) {
     speech.stop();
 }
 
-/// English system voices, best first, for the picker in Settings.
+/// Every voice Frank can speak with: natural ones first, then the system's.
 #[tauri::command]
-pub async fn list_voices() -> Result<Vec<SystemVoice>, ()> {
-    Ok(tokio::task::spawn_blocking(|| speech::voices().to_vec())
+pub async fn list_voices() -> Result<Vec<VoiceChoice>, ()> {
+    Ok(tokio::task::spawn_blocking(speech::choices)
         .await
         .unwrap_or_default())
 }

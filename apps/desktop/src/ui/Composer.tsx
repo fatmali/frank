@@ -10,14 +10,42 @@ export interface ComposerHandle {
 
 const METER_BARS = 28;
 
+/** What hands-free is doing, in the composer. */
+const HANDS_FREE_WORDS = {
+  waiting: 'Listening. Just talk.',
+  hearing: 'Hearing you',
+  checking: 'Hearing you',
+} as const;
+
+function Meter({ levels }: { levels: number[] }) {
+  return (
+    <span className="meter" aria-hidden="true">
+      {levels.map((l, i) => (
+        <span key={i} style={{ height: `${Math.max(8, Math.min(1, l * 1.6) * 100)}%` }} />
+      ))}
+    </span>
+  );
+}
+
 /**
  * One line that grows as you type, or a live level meter while you talk.
- * Enter sends; Shift+Enter adds a line; hold Space (when empty) to talk.
+ * Enter sends; Shift+Enter adds a line; hold Space (when empty) to talk, or tap
+ * it to talk hands-free.
  */
 export const Composer = forwardRef<ComposerHandle>(function Composer(_, ref) {
   const c = useController();
-  const { view, changing, streaming, selected, voice, voiceError, config, reading } =
-    usePanel();
+  const {
+    view,
+    changing,
+    streaming,
+    selected,
+    voice,
+    voiceError,
+    config,
+    reading,
+    handsFree,
+    downloads,
+  } = usePanel();
   const [text, setText] = useState('');
   const input = useRef<HTMLTextAreaElement>(null);
   const [levels, setLevels] = useState<number[]>(() => Array(METER_BARS).fill(0));
@@ -39,7 +67,12 @@ export const Composer = forwardRef<ComposerHandle>(function Composer(_, ref) {
   }, [text]);
 
   // The meter scrolls: each new level pushes the oldest out.
-  const level = voice.state === 'listening' ? voice.level : undefined;
+  const level =
+    voice.state === 'listening'
+      ? voice.level
+      : handsFree && handsFree.state !== 'paused'
+        ? handsFree.level
+        : undefined;
   useEffect(() => {
     if (level === undefined) {
       setLevels(Array(METER_BARS).fill(0));
@@ -50,25 +83,21 @@ export const Composer = forwardRef<ComposerHandle>(function Composer(_, ref) {
 
   const hotkey = displayHotkey(config?.hotkey ?? 'Alt+Shift+Space');
 
-  if (voice.state === 'needs-model') {
+  if (voice.state === 'needs-pack') {
     return (
-      <div
-        className="composer voice-consent"
-        role="dialog"
-        aria-label="Download the speech model"
-      >
+      <div className="composer voice-consent" role="dialog" aria-label="Download voice">
         <p>
-          Voice runs on this Mac. It needs a {voice.megabytes} MB speech model, downloaded
-          once. Your voice never leaves this Mac.
+          Voice runs on this Mac. It needs {voice.megabytes} MB of speech models,
+          downloaded once. Your voice never leaves this Mac.
         </p>
         <div className="state-actions">
-          <button className="text-button" onClick={() => c.declineVoiceModel()}>
+          <button className="text-button" onClick={() => c.declinePack()}>
             Not now <Kbd>esc</Kbd>
           </button>
           <button
             className="button primary"
             autoFocus
-            onClick={() => void c.downloadVoiceModel()}
+            onClick={() => void c.downloadPack(voice.pack)}
           >
             Download <Kbd>↵</Kbd>
           </button>
@@ -76,11 +105,12 @@ export const Composer = forwardRef<ComposerHandle>(function Composer(_, ref) {
       </div>
     );
   }
-  if (voice.state === 'downloading') {
+  const listening = downloads.listening;
+  if (listening !== undefined) {
     return (
       <div className="composer voice-status" role="status">
-        <span>Downloading the speech model, {Math.round(voice.fraction * 100)}%</span>
-        <span className="download-bar" style={{ width: `${voice.fraction * 100}%` }} />
+        <span>Downloading the speech models, {Math.round(listening * 100)}%</span>
+        <span className="download-bar" style={{ width: `${listening * 100}%` }} />
       </div>
     );
   }
@@ -91,17 +121,40 @@ export const Composer = forwardRef<ComposerHandle>(function Composer(_, ref) {
         role="status"
         onClick={() => void c.stopTalking()}
       >
-        <span className="meter" aria-hidden="true">
-          {levels.map((l, i) => (
-            <span
-              key={i}
-              style={{ height: `${Math.max(8, Math.min(1, l * 1.6) * 100)}%` }}
-            />
-          ))}
-        </span>
+        <Meter levels={levels} />
         <span>
           {voice.state === 'listening' ? 'Listening. Let go to send.' : 'Got it.'}
         </span>
+      </div>
+    );
+  }
+  if (handsFree && handsFree.state !== 'paused') {
+    return (
+      <div
+        className={`composer voice-status listening hands-free ${handsFree.state}`}
+        role="status"
+        aria-live="polite"
+      >
+        <Meter levels={levels} />
+        <span>{HANDS_FREE_WORDS[handsFree.state]}</span>
+        <button className="text-button" onClick={() => void c.stopHandsFree()}>
+          Stop <Kbd>space</Kbd>
+        </button>
+      </div>
+    );
+  }
+  if (handsFree) {
+    return (
+      <div className="composer voice-status hands-free paused" role="status">
+        <span className="hands-free-dot" aria-hidden="true" />
+        <span>
+          {voice.state === 'speaking'
+            ? 'Your turn when Frank finishes. Space to cut in.'
+            : 'Your turn when Frank finishes.'}
+        </span>
+        <button className="text-button" onClick={() => void c.stopHandsFree()}>
+          Stop <Kbd>esc</Kbd>
+        </button>
       </div>
     );
   }
@@ -113,7 +166,7 @@ export const Composer = forwardRef<ComposerHandle>(function Composer(_, ref) {
       : view.name === 'no-plan'
         ? 'Paste a plan here, or drop a file'
         : view.name === 'call'
-          ? `Ask about this, or hold Space to talk`
+          ? 'Ask about this. Hold Space to talk, tap it to talk freely'
           : `Ask about the plan, or hold ${hotkey} to talk`;
 
   const send = () => {
@@ -159,8 +212,9 @@ export const Composer = forwardRef<ComposerHandle>(function Composer(_, ref) {
         {view.name !== 'no-plan' && (
           <button
             className="mic"
-            aria-label="Talk to Frank. Click to start, click again to send."
-            onClick={() => void c.startTalking()}
+            aria-label="Talk to Frank hands-free. He hears when you've finished."
+            title="Talk freely (tap Space)"
+            onClick={() => void c.toggleHandsFree()}
           >
             <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
               <rect

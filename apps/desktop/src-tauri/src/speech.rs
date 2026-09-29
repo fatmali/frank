@@ -1,23 +1,29 @@
-//! Frank's spoken replies, with the system voice (docs/ux.md §6.1).
+//! Frank's spoken replies (docs/ux.md §6.1).
 //!
 //! Replies arrive a sentence at a time while the brain is still writing, so
 //! speech is a queue: each sentence starts as soon as the previous one ends.
-//! Frank uses the voice chosen in Settings, or else the most natural English
-//! voice installed: macOS "Premium" and "Enhanced" voices sound far better
-//! than the compact default.
+//!
+//! Two kinds of voice. Natural voices are Kokoro, on this Mac, once the
+//! voice pack is downloaded; they are the default when installed. System
+//! voices are macOS's own (`say`), best installed first. A voice setting is
+//! `natural:<id>` or `system:<name>`; empty means the best available.
 
+use crate::audio_out::Player;
+use crate::kokoro::{self, Kokoro};
+use crate::packs::Pack;
 use crate::state::{AppState, lock};
 use crate::voice::VoiceEvent;
 use serde::Serialize;
 use std::collections::VecDeque;
 use std::process::{Child, Command};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
 #[derive(Default)]
 pub struct Speech {
     inner: Mutex<Queue>,
+    kokoro: Mutex<Option<Arc<Kokoro>>>,
 }
 
 #[derive(Default)]
@@ -30,7 +36,21 @@ struct Queue {
     running: bool,
 }
 
-/// An installed system voice, for the picker in Settings.
+/// A voice Frank can speak with, for the picker in Settings.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VoiceChoice {
+    /// What goes in the config: `natural:am_michael`, `system:Ava (Premium)`.
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    /// "natural" or "system".
+    pub kind: &'static str,
+    /// Natural voices need the voice pack first.
+    pub installed: bool,
+}
+
+/// An installed system voice.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SystemVoice {
@@ -38,6 +58,57 @@ pub struct SystemVoice {
     pub language: String,
     /// "premium", "enhanced" or "standard".
     pub quality: &'static str,
+}
+
+/// Every voice to offer: natural ones first, then the system's.
+pub fn choices() -> Vec<VoiceChoice> {
+    let installed = Pack::Voices.installed();
+    let natural = kokoro::VOICES
+        .iter()
+        .map(|(id, name, description)| VoiceChoice {
+            id: format!("natural:{id}"),
+            name: (*name).to_owned(),
+            description: (*description).to_owned(),
+            kind: "natural",
+            installed,
+        });
+    let system = voices().iter().map(|v| VoiceChoice {
+        id: format!("system:{}", v.name),
+        name: v.name.clone(),
+        description: match v.quality {
+            "premium" => "macOS, premium".into(),
+            "enhanced" => "macOS, enhanced".into(),
+            _ => "macOS".into(),
+        },
+        kind: "system",
+        installed: true,
+    });
+    natural.chain(system).collect()
+}
+
+/// A voice setting, resolved to what can actually speak now.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Resolved {
+    Natural(String),
+    System(Option<String>),
+}
+
+fn resolve(setting: &str, pack_installed: bool, best_system: Option<&str>) -> Resolved {
+    if let Some(id) = setting.strip_prefix("natural:") {
+        if pack_installed {
+            return Resolved::Natural(id.to_owned());
+        }
+    } else if let Some(name) = setting.strip_prefix("system:") {
+        return Resolved::System(Some(name.to_owned()));
+    } else if !setting.is_empty() {
+        // A plain name, from before natural voices existed.
+        return Resolved::System(Some(setting.to_owned()));
+    }
+    if pack_installed {
+        Resolved::Natural(kokoro::DEFAULT_VOICE.to_owned())
+    } else {
+        Resolved::System(best_system.map(str::to_owned))
+    }
 }
 
 impl Speech {
@@ -51,9 +122,26 @@ impl Speech {
         self.stop();
         self.enqueue(
             app,
-            "The plan adds Redis. You run one instance. You don't need it yet.",
+            "The plan adds Redis. You run one instance, so you don't need it yet.",
             Some(voice.to_owned()),
         );
+    }
+
+    /// Loads the natural voice ahead of time, so the first sentence is quick.
+    pub fn warm_up(&self) {
+        if Pack::Voices.installed() {
+            let _ = self.kokoro();
+        }
+    }
+
+    fn kokoro(&self) -> Result<Arc<Kokoro>, String> {
+        let mut slot = lock(&self.kokoro);
+        if let Some(k) = slot.as_ref() {
+            return Ok(k.clone());
+        }
+        let k = Arc::new(Kokoro::load(&Pack::Voices.dir())?);
+        *slot = Some(k.clone());
+        Ok(k)
     }
 
     fn enqueue(&self, app: &AppHandle, text: &str, voice: Option<String>) {
@@ -82,6 +170,13 @@ impl Speech {
             let _ = child.kill();
             let _ = child.wait();
         }
+        if let Some(player) = Player::get_if_started() {
+            player.stop();
+        }
+    }
+
+    fn current(&self, generation: u64) -> bool {
+        lock(&self.inner).generation == generation
     }
 }
 
@@ -89,7 +184,8 @@ impl Speech {
 /// Frank is stopped.
 fn speak_queue(app: &AppHandle, generation: u64) {
     let speech = app.state::<Speech>();
-    let voice = chosen_voice(app);
+    let setting = app.state::<AppState>().config().voice.name;
+    let best = voices().first().map(|v| v.name.clone());
     loop {
         let (line, only_this) = {
             let mut q = lock(&speech.inner);
@@ -104,43 +200,63 @@ fn speak_queue(app: &AppHandle, generation: u64) {
                 }
             }
         };
-        let voice = only_this.as_deref().or(voice.as_deref());
-        let Some(mut command) = speech_command(&line, voice) else {
-            continue;
-        };
-        let Ok(child) = command.spawn() else {
-            continue;
-        };
-        let pid = child.id();
-        lock(&speech.inner).child = Some(child);
-        // Wait without holding the lock, so stop() can kill it.
-        loop {
-            std::thread::sleep(Duration::from_millis(40));
-            let mut q = lock(&speech.inner);
-            if q.generation != generation {
-                return;
-            }
-            match q.child.as_mut() {
-                Some(c) if c.id() == pid => {
-                    if !matches!(c.try_wait(), Ok(None)) {
-                        q.child = None;
-                        break;
+        let voice = resolve(
+            only_this.as_deref().unwrap_or(&setting),
+            Pack::Voices.installed(),
+            best.as_deref(),
+        );
+        match voice {
+            Resolved::Natural(id) => {
+                // Make the next sentence while this one plays.
+                let audio = speech.kokoro().and_then(|k| k.speak(&line, &id, 1.0));
+                match (audio, Player::get()) {
+                    (Ok(audio), Some(player)) if speech.current(generation) => {
+                        player.play(&audio, kokoro::SAMPLE_RATE);
                     }
+                    (Err(e), _) => eprintln!("frank: natural voice: {e}"),
+                    _ => {}
                 }
-                _ => break,
             }
+            Resolved::System(name) => say_with_system(&speech, &line, name.as_deref(), generation),
         }
     }
-    let _ = app.emit_to("panel", "voice", VoiceEvent::Spoken);
+    // Wait for the last natural sentence to finish playing.
+    if let Some(player) = Player::get_if_started() {
+        while player.pending_seconds() > 0.0 && speech.current(generation) {
+            std::thread::sleep(Duration::from_millis(40));
+        }
+    }
+    if speech.current(generation) {
+        let _ = app.emit_to("panel", "voice", VoiceEvent::Spoken);
+    }
 }
 
-/// The voice from Settings, else the best one installed.
-fn chosen_voice(app: &AppHandle) -> Option<String> {
-    let name = app.state::<AppState>().config().voice.name;
-    if !name.is_empty() {
-        return Some(name);
+fn say_with_system(speech: &Speech, line: &str, voice: Option<&str>, generation: u64) {
+    let Some(mut command) = speech_command(line, voice) else {
+        return;
+    };
+    let Ok(child) = command.spawn() else {
+        return;
+    };
+    let pid = child.id();
+    lock(&speech.inner).child = Some(child);
+    // Wait without holding the lock, so stop() can kill it.
+    loop {
+        std::thread::sleep(Duration::from_millis(40));
+        let mut q = lock(&speech.inner);
+        if q.generation != generation {
+            return;
+        }
+        match q.child.as_mut() {
+            Some(c) if c.id() == pid => {
+                if !matches!(c.try_wait(), Ok(None)) {
+                    q.child = None;
+                    return;
+                }
+            }
+            _ => return,
+        }
     }
-    voices().first().map(|v| v.name.clone())
 }
 
 /// English voices worth hearing, best first. Cached: listing is slow-ish.
@@ -283,6 +399,35 @@ Samantha            en_US    # Hello! My name is Samantha.
 Zoe (Enhanced)      en_US    # Hello! My name is Zoe.
 Bad News            en_US    # The light you see at the end of the tunnel is the headlamp of a fast approaching train.
 ";
+
+    #[test]
+    fn natural_voices_win_once_installed() {
+        assert_eq!(
+            resolve("", true, Some("Ava (Premium)")),
+            Resolved::Natural("am_michael".into())
+        );
+        assert_eq!(
+            resolve("", false, Some("Ava (Premium)")),
+            Resolved::System(Some("Ava (Premium)".into()))
+        );
+        assert_eq!(
+            resolve("natural:af_heart", true, None),
+            Resolved::Natural("af_heart".into())
+        );
+        // Chose a natural voice, but the pack is gone: the best system voice.
+        assert_eq!(
+            resolve("natural:af_heart", false, Some("Samantha")),
+            Resolved::System(Some("Samantha".into()))
+        );
+        assert_eq!(
+            resolve("system:Zoe (Enhanced)", true, None),
+            Resolved::System(Some("Zoe (Enhanced)".into()))
+        );
+        assert_eq!(
+            resolve("Daniel", true, None),
+            Resolved::System(Some("Daniel".into()))
+        );
+    }
 
     #[test]
     fn prefers_premium_then_enhanced_then_decent_voices() {

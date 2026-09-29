@@ -33,8 +33,8 @@ export function DemoPage({
             <kbd className="kbd">?</kbd> Frank's take
           </li>
           <li>
-            Hold <kbd className="kbd">Space</kbd> to talk and let go to send, or tap the
-            microphone, then tap again
+            Hold <kbd className="kbd">Space</kbd> to talk and let go to send, or tap it to
+            talk freely: Frank hears when you've finished
           </li>
         </ul>
       </header>
@@ -43,7 +43,7 @@ export function DemoPage({
         <p className="demo-next" aria-live="polite">
           {nextLine ? (
             <>
-              When you hold Space, the pretend microphone hears: <q>{nextLine}</q>
+              When you talk, the pretend microphone hears: <q>{nextLine}</q>
             </>
           ) : (
             'The pretend microphone has run out of lines.'

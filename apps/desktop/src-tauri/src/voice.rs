@@ -1,11 +1,14 @@
-//! Talking to Frank (docs/ux.md §6): push-to-talk capture, on-device
-//! transcription with Whisper, and spoken replies with the system voice.
+//! Talking to Frank (docs/ux.md §6): push-to-talk and hands-free
+//! conversation, transcribed on this Mac with Whisper.
 //!
-//! Audio stays on this machine and is never written to disk. The speech
-//! model is downloaded once, with the developer's consent, to
-//! `~/.frank/models/`.
+//! Audio stays on this machine and is never written to disk. The listening
+//! models are downloaded once, with consent (packs.rs).
 
+use crate::packs::Pack;
+use crate::state::lock;
+use crate::vad::{self, Silero, Turn, Turns};
 use serde::Serialize;
+use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
@@ -13,13 +16,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::state::lock;
-
-const MODEL_FILE: &str = "ggml-base.en.bin";
-const MODEL_URL: &str =
-    "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin";
-/// Roughly, for the consent message.
-const MODEL_MEGABYTES: u32 = 142;
+const WHISPER_FILE: &str = "ggml-base.en.bin";
+const VAD_FILE: &str = "silero_vad.onnx";
 /// Whisper wants 16 kHz mono.
 const WHISPER_RATE: u32 = 16_000;
 /// Nobody talks to a duck for longer than this in one go.
@@ -27,6 +25,10 @@ const MAX_RECORDING: Duration = Duration::from_secs(90);
 /// Shorter than this is a slip of the key, not speech.
 const MIN_SPEECH: Duration = Duration::from_millis(300);
 const LEVEL_EVERY: Duration = Duration::from_millis(50);
+/// Hands-free stops listening after this long with nobody talking.
+const HANDS_FREE_IDLE: Duration = Duration::from_secs(45);
+/// Speech kept from just before a turn starts, so first words aren't clipped.
+const PRE_ROLL_CHUNKS: usize = 10;
 
 const MIC_DENIED: &str =
     "Frank can't hear you. Allow the microphone in System Settings, Privacy, Microphone.";
@@ -36,15 +38,37 @@ const NO_MIC: &str = "Frank can't find a microphone.";
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum VoiceEvent {
+    /// Push-to-talk is recording.
     Listening,
-    Level { level: f32 },
+    Level {
+        level: f32,
+    },
     Transcribing,
-    Heard { text: String },
-    Failed { message: String },
-    NeedsModel { megabytes: u32 },
-    Downloading { fraction: f32 },
-    ModelReady,
+    Heard {
+        text: String,
+    },
+    Failed {
+        message: String,
+    },
+    /// A pack has to be downloaded first; nothing was recorded.
+    NeedsPack {
+        pack: &'static str,
+        megabytes: u32,
+    },
+    Downloading {
+        pack: &'static str,
+        fraction: f32,
+    },
+    PackReady {
+        pack: &'static str,
+    },
+    /// Frank finished (or stopped) speaking.
     Spoken,
+    /// Hands-free: "waiting" for you, "hearing" you, "checking" whether you've
+    /// finished, "paused" while Frank answers, or "off".
+    HandsFree {
+        state: &'static str,
+    },
 }
 
 fn emit(app: &AppHandle, event: VoiceEvent) {
@@ -55,38 +79,49 @@ fn emit(app: &AppHandle, event: VoiceEvent) {
 pub struct Voice {
     recording: Mutex<Option<Recording>>,
     whisper: Mutex<Option<Arc<whisper_rs::WhisperContext>>>,
-    downloading: AtomicBool,
+    hands_free: Mutex<Option<HandsFree>>,
 }
 
 struct Recording {
     stop: mpsc::Sender<()>,
-    done: mpsc::Receiver<Result<Captured, String>>,
+    done: mpsc::Receiver<Result<Vec<f32>, String>>,
     started: Instant,
 }
 
-/// Mono samples at the device's rate.
-struct Captured {
-    samples: Vec<f32>,
-    rate: u32,
+struct HandsFree {
+    stop: mpsc::Sender<()>,
+    /// While Frank answers, what the microphone hears is ignored, so he
+    /// never mistakes his own voice for the developer's.
+    paused: Arc<AtomicBool>,
 }
 
-pub fn model_path() -> PathBuf {
-    frank_core::config::frank_home()
-        .join("models")
-        .join(MODEL_FILE)
+fn whisper_path() -> PathBuf {
+    Pack::Listening.path(WHISPER_FILE)
+}
+
+fn vad_path() -> PathBuf {
+    Pack::Listening.path(VAD_FILE)
+}
+
+fn needs_pack(app: &AppHandle, pack: Pack) {
+    emit(
+        app,
+        VoiceEvent::NeedsPack {
+            pack: pack.id(),
+            megabytes: pack.megabytes_missing().max(1),
+        },
+    );
 }
 
 impl Voice {
-    /// Starts listening. Without the speech model, asks for it instead.
+    /// Push-to-talk: starts recording. Without Whisper, asks for it instead.
     pub fn start(&self, app: &AppHandle) {
         app.state::<crate::speech::Speech>().stop();
-        if !model_path().exists() {
-            emit(
-                app,
-                VoiceEvent::NeedsModel {
-                    megabytes: MODEL_MEGABYTES,
-                },
-            );
+        if !whisper_path().exists() {
+            return needs_pack(app, Pack::Listening);
+        }
+        if lock(&self.hands_free).is_some() {
+            // Already listening hands-free; holding the key changes nothing.
             return;
         }
         let mut slot = lock(&self.recording);
@@ -97,8 +132,17 @@ impl Voice {
         let (done_tx, done_rx) = mpsc::channel();
         let levels = app.clone();
         std::thread::spawn(move || {
-            let result = record(&stop_rx, move |level| {
-                emit(&levels, VoiceEvent::Level { level });
+            let samples = Arc::new(Mutex::new(Vec::<f32>::new()));
+            let sink = samples.clone();
+            let mut meter = Meter::new(move |level| emit(&levels, VoiceEvent::Level { level }));
+            let result = open_microphone(move |mono, rate| {
+                meter.push(mono);
+                lock(&sink).extend(resample(mono, rate, WHISPER_RATE));
+            })
+            .map(|stream| {
+                let _ = stop_rx.recv_timeout(MAX_RECORDING);
+                drop(stream);
+                std::mem::take(&mut *lock(&samples))
             });
             let _ = done_tx.send(result);
         });
@@ -108,14 +152,10 @@ impl Voice {
             started: Instant::now(),
         });
         emit(app, VoiceEvent::Listening);
-        // Load the model while the developer talks, not after.
-        let warm = app.clone();
-        std::thread::spawn(move || {
-            let _ = warm.state::<Voice>().whisper();
-        });
+        self.warm_up(app);
     }
 
-    /// Stops listening and transcribes, off the main thread.
+    /// Push-to-talk: stops recording and transcribes, off the main thread.
     pub fn stop(&self, app: &AppHandle) {
         let Some(recording) = lock(&self.recording).take() else {
             return;
@@ -124,27 +164,23 @@ impl Voice {
         let app = app.clone();
         tauri::async_runtime::spawn_blocking(move || {
             let too_short = recording.started.elapsed() < MIN_SPEECH;
-            let captured = match recording.done.recv() {
-                Ok(Ok(c)) => c,
-                Ok(Err(message)) => return emit(&app, VoiceEvent::Failed { message }),
-                Err(_) => {
-                    return emit(
-                        &app,
-                        VoiceEvent::Heard {
-                            text: String::new(),
-                        },
-                    );
-                }
-            };
-            if too_short {
-                return emit(
-                    &app,
+            let heard_nothing = |app: &AppHandle| {
+                emit(
+                    app,
                     VoiceEvent::Heard {
                         text: String::new(),
                     },
-                );
+                )
+            };
+            let samples = match recording.done.recv() {
+                Ok(Ok(s)) => s,
+                Ok(Err(message)) => return emit(&app, VoiceEvent::Failed { message }),
+                Err(_) => return heard_nothing(&app),
+            };
+            if too_short {
+                return heard_nothing(&app);
             }
-            if is_digital_silence(&captured.samples) {
+            if is_digital_silence(&samples) {
                 // macOS hands a denied app a stream of exact zeros.
                 return emit(
                     &app,
@@ -154,8 +190,7 @@ impl Voice {
                 );
             }
             emit(&app, VoiceEvent::Transcribing);
-            let voice = app.state::<Voice>();
-            let event = match voice.transcribe(&captured) {
+            let event = match app.state::<Voice>().transcribe(&samples) {
                 Ok(text) => VoiceEvent::Heard { text },
                 Err(message) => VoiceEvent::Failed { message },
             };
@@ -163,10 +198,64 @@ impl Voice {
         });
     }
 
-    fn transcribe(&self, captured: &Captured) -> Result<String, String> {
+    /// Hands-free: listens until told to stop, turning each thing the
+    /// developer says into a "heard" event when they've finished saying it.
+    pub fn hands_free_start(&self, app: &AppHandle) {
+        app.state::<crate::speech::Speech>().stop();
+        if !Pack::Listening.installed() {
+            return needs_pack(app, Pack::Listening);
+        }
+        let mut slot = lock(&self.hands_free);
+        if slot.is_some() {
+            return;
+        }
+        let (stop_tx, stop_rx) = mpsc::channel();
+        let paused = Arc::new(AtomicBool::new(false));
+        let flag = paused.clone();
+        let app2 = app.clone();
+        std::thread::spawn(move || {
+            if let Err(message) = hands_free(&app2, &stop_rx, &flag) {
+                emit(&app2, VoiceEvent::Failed { message });
+            }
+            *lock(&app2.state::<Voice>().hands_free) = None;
+            emit(&app2, VoiceEvent::HandsFree { state: "off" });
+        });
+        *slot = Some(HandsFree {
+            stop: stop_tx,
+            paused,
+        });
+        emit(app, VoiceEvent::HandsFree { state: "waiting" });
+        self.warm_up(app);
+    }
+
+    /// Hands-free: Frank has answered; listen for the developer again.
+    pub fn hands_free_resume(&self, app: &AppHandle) {
+        if let Some(h) = lock(&self.hands_free).as_ref()
+            && h.paused.swap(false, Ordering::SeqCst)
+        {
+            emit(app, VoiceEvent::HandsFree { state: "waiting" });
+        }
+    }
+
+    pub fn hands_free_stop(&self) {
+        if let Some(h) = lock(&self.hands_free).as_ref() {
+            let _ = h.stop.send(());
+        }
+    }
+
+    /// Loads Whisper (and the natural voice) while the developer talks.
+    fn warm_up(&self, app: &AppHandle) {
+        let warm = app.clone();
+        std::thread::spawn(move || {
+            let _ = warm.state::<Voice>().whisper();
+            warm.state::<crate::speech::Speech>().warm_up();
+        });
+    }
+
+    /// 16 kHz mono speech to text.
+    fn transcribe(&self, audio: &[f32]) -> Result<String, String> {
         let ctx = self.whisper()?;
         let started = Instant::now();
-        let audio = resample(&captured.samples, captured.rate, WHISPER_RATE);
         let seconds = audio.len() as f32 / WHISPER_RATE as f32;
         let mut state = ctx
             .create_state()
@@ -187,7 +276,7 @@ impl Voice {
         let threads = std::thread::available_parallelism().map_or(4, |n| n.get().min(8));
         params.set_n_threads(threads as i32);
         state
-            .full(params, &audio)
+            .full(params, audio)
             .map_err(|e| format!("Couldn't transcribe: {e}"))?;
         let text: Vec<String> = state
             .as_iter()
@@ -206,7 +295,7 @@ impl Voice {
         if let Some(ctx) = slot.as_ref() {
             return Ok(ctx.clone());
         }
-        let path = model_path();
+        let path = whisper_path();
         let ctx = whisper_rs::WhisperContext::new_with_params(
             &path,
             whisper_rs::WhisperContextParameters::default(),
@@ -214,40 +303,185 @@ impl Voice {
         .map_err(|_| {
             // A broken download: remove it so the next try downloads again.
             let _ = std::fs::remove_file(&path);
-            "The speech model didn't load. Hold to talk to download it again.".to_owned()
+            "The speech model didn't load. Try talking again to download it again.".to_owned()
         })?;
         let ctx = Arc::new(ctx);
         *slot = Some(ctx.clone());
         Ok(ctx)
     }
+}
 
-    /// Downloads the speech model, reporting progress, then says it's ready.
-    pub async fn download(&self, app: &AppHandle) {
-        if self.downloading.swap(true, Ordering::SeqCst) {
-            return;
+/// The hands-free loop: listen, hand each finished thought to the panel,
+/// then wait while Frank answers.
+fn hands_free(
+    app: &AppHandle,
+    stop: &mpsc::Receiver<()>,
+    paused: &AtomicBool,
+) -> Result<(), String> {
+    let mut ear = Ear::new(Silero::load(&vad_path())?);
+    let (tx, rx) = mpsc::channel::<Vec<f32>>();
+    let _stream = open_microphone(move |mono, rate| {
+        let _ = tx.send(resample(mono, rate, vad::RATE));
+    })?;
+
+    let levels = app.clone();
+    let mut meter = Meter::new(move |level| emit(&levels, VoiceEvent::Level { level }));
+    let mut pending: Vec<f32> = Vec::new();
+    let mut last_speech = Instant::now();
+    let mut heard_anything = false;
+    let started = Instant::now();
+    let voice = app.state::<Voice>();
+    let mut transcribe = |audio: &[f32]| voice.transcribe(audio);
+    let mut heard = Vec::new();
+
+    loop {
+        if stop.try_recv().is_ok() {
+            return Ok(());
         }
-        let result = download_model(app).await;
-        self.downloading.store(false, Ordering::SeqCst);
-        match result {
-            Ok(()) => emit(app, VoiceEvent::ModelReady),
-            Err(e) => {
-                eprintln!("frank: speech model download: {e}");
-                emit(
-                    app,
-                    VoiceEvent::Failed {
-                        message: "Couldn't download the speech model. Check your connection, then hold to talk to try again.".into(),
-                    },
-                );
+        let Ok(samples) = rx.recv_timeout(Duration::from_millis(100)) else {
+            continue;
+        };
+        if paused.load(Ordering::SeqCst) {
+            // Frank is answering: don't listen to him, or to the room.
+            pending.clear();
+            ear.reset();
+            last_speech = Instant::now();
+            continue;
+        }
+        heard_anything |= !is_digital_silence(&samples);
+        if !heard_anything && started.elapsed() > Duration::from_secs(2) {
+            return Err(MIC_DENIED.into());
+        }
+        pending.extend(samples);
+        while pending.len() >= vad::CHUNK {
+            let chunk: Vec<f32> = pending.drain(..vad::CHUNK).collect();
+            meter.push(&chunk);
+            ear.hear(&chunk, &mut transcribe, &mut heard)?;
+            if ear.talking() {
+                last_speech = Instant::now();
             }
+            for h in heard.drain(..) {
+                match h {
+                    Heard::State(state) => emit(app, VoiceEvent::HandsFree { state }),
+                    Heard::Said(text) => {
+                        paused.store(true, Ordering::SeqCst);
+                        emit(app, VoiceEvent::HandsFree { state: "paused" });
+                        emit(app, VoiceEvent::Heard { text });
+                        pending.clear();
+                    }
+                }
+            }
+        }
+        if !ear.talking() && last_speech.elapsed() > HANDS_FREE_IDLE {
+            return Ok(());
         }
     }
 }
 
-/// Records from the default microphone until told to stop.
-fn record(
-    stop: &mpsc::Receiver<()>,
-    on_level: impl Fn(f32) + Send + 'static,
-) -> Result<Captured, String> {
+/// What hands-free made of a chunk of audio.
+#[derive(Debug, Clone, PartialEq)]
+enum Heard {
+    /// "hearing", "checking" or "waiting", for the panel.
+    State(&'static str),
+    /// The developer finished a thought.
+    Said(String),
+}
+
+/// Follows the developer's turns: when they start, pause, carry on, and
+/// finish, keeping what they said.
+struct Ear {
+    silero: Silero,
+    turns: Turns,
+    /// The last moments before a turn starts, so the first word isn't lost.
+    pre_roll: VecDeque<Vec<f32>>,
+    utterance: Vec<f32>,
+}
+
+impl Ear {
+    fn new(silero: Silero) -> Self {
+        Self {
+            silero,
+            turns: Turns::default(),
+            pre_roll: VecDeque::new(),
+            utterance: Vec::new(),
+        }
+    }
+
+    fn reset(&mut self) {
+        self.silero.reset();
+        self.turns.reset();
+        self.pre_roll.clear();
+        self.utterance.clear();
+    }
+
+    fn talking(&self) -> bool {
+        self.turns.talking()
+    }
+
+    /// Hears one `vad::CHUNK` of 16 kHz audio. When the developer goes
+    /// quiet, `transcribe` shows whether the thought sounds finished.
+    fn hear(
+        &mut self,
+        chunk: &[f32],
+        transcribe: &mut impl FnMut(&[f32]) -> Result<String, String>,
+        out: &mut Vec<Heard>,
+    ) -> Result<(), String> {
+        let turn = self.turns.feed(self.silero.speech(chunk)?);
+        match turn {
+            Turn::Nothing if self.turns.talking() => self.utterance.extend(chunk),
+            Turn::Nothing => {
+                self.pre_roll.push_back(chunk.to_vec());
+                if self.pre_roll.len() > PRE_ROLL_CHUNKS {
+                    self.pre_roll.pop_front();
+                }
+            }
+            Turn::Started => {
+                self.utterance = self.pre_roll.drain(..).flatten().collect();
+                self.utterance.extend(chunk);
+                out.push(Heard::State("hearing"));
+            }
+            Turn::Resumed => {
+                self.utterance.extend(chunk);
+                out.push(Heard::State("hearing"));
+            }
+            Turn::Paused => {
+                self.utterance.extend(chunk);
+                // Gone quiet: has the developer finished the thought, or are
+                // they mid-sentence ("we could use Redis because...")?
+                out.push(Heard::State("checking"));
+                let text = transcribe(&self.utterance)?;
+                if vad::sounds_finished(&text) {
+                    self.said(text, out);
+                } else {
+                    out.push(Heard::State("hearing"));
+                }
+            }
+            Turn::Ended => {
+                // Quiet for long enough that the turn is over, finished or not.
+                let text = transcribe(&self.utterance)?;
+                self.said(text, out);
+            }
+        }
+        Ok(())
+    }
+
+    fn said(&mut self, text: String, out: &mut Vec<Heard>) {
+        self.turns.reset();
+        self.pre_roll.clear();
+        self.utterance.clear();
+        if text.trim().is_empty() {
+            out.push(Heard::State("waiting"));
+        } else {
+            out.push(Heard::Said(text));
+        }
+    }
+}
+
+/// Opens the default microphone. `on_audio` gets mono samples and their
+/// rate; the microphone stays open until the returned stream is dropped.
+fn open_microphone(
+    mut on_audio: impl FnMut(&[f32], u32) + Send + 'static,
+) -> Result<cpal::Stream, String> {
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
     let host = cpal::default_host();
@@ -257,19 +491,13 @@ fn record(
         .map_err(|_| MIC_DENIED.to_owned())?;
     let channels = usize::from(config.channels()).max(1);
     let rate = config.sample_rate();
-    let samples = Arc::new(Mutex::new(Vec::<f32>::with_capacity(rate as usize * 10)));
-    let meter = Arc::new(Mutex::new(Meter::new(on_level)));
 
     macro_rules! stream {
         ($t:ty) => {{
-            let samples = samples.clone();
-            let meter = meter.clone();
             device.build_input_stream(
                 config.clone().into(),
                 move |data: &[$t], _: &cpal::InputCallbackInfo| {
-                    let mono = downmix(data, channels);
-                    lock(&meter).push(&mono);
-                    lock(&samples).extend_from_slice(&mono);
+                    on_audio(&downmix(data, channels), rate);
                 },
                 |e| eprintln!("frank: microphone: {e}"),
                 None,
@@ -290,10 +518,7 @@ fn record(
     }
     .map_err(|_| MIC_DENIED.to_owned())?;
     stream.play().map_err(|_| MIC_DENIED.to_owned())?;
-    let _ = stop.recv_timeout(MAX_RECORDING);
-    drop(stream);
-    let samples = std::mem::take(&mut *lock(&samples));
-    Ok(Captured { samples, rate })
+    Ok(stream)
 }
 
 /// Averages interleaved channels into mono f32.
@@ -348,7 +573,7 @@ fn is_digital_silence(samples: &[f32]) -> bool {
 }
 
 /// Linear resampling. Good enough for speech into Whisper.
-fn resample(samples: &[f32], from: u32, to: u32) -> Vec<f32> {
+pub fn resample(samples: &[f32], from: u32, to: u32) -> Vec<f32> {
     if from == to || samples.is_empty() {
         return samples.to_vec();
     }
@@ -390,53 +615,6 @@ fn strip_bracketed(text: &str) -> String {
 /// headroom, never below what keeps short clips accurate.
 fn audio_ctx(seconds: f32) -> i32 {
     ((seconds * 50.0).ceil() as i32 + 64).clamp(384, 1500)
-}
-
-async fn download_model(app: &AppHandle) -> Result<(), String> {
-    let path = model_path();
-    let dir = path.parent().ok_or("no models folder")?;
-    tokio::fs::create_dir_all(dir)
-        .await
-        .map_err(|e| e.to_string())?;
-    let part = path.with_extension("bin.part");
-    let client = reqwest::Client::builder()
-        .connect_timeout(Duration::from_secs(15))
-        .build()
-        .map_err(|e| e.to_string())?;
-    let mut response = client
-        .get(MODEL_URL)
-        .send()
-        .await
-        .and_then(reqwest::Response::error_for_status)
-        .map_err(|e| e.to_string())?;
-    let total = response.content_length().unwrap_or(0);
-    let mut file = tokio::fs::File::create(&part)
-        .await
-        .map_err(|e| e.to_string())?;
-    let mut received = 0u64;
-    let mut reported = 0.0f32;
-    use tokio::io::AsyncWriteExt;
-    while let Some(chunk) = response.chunk().await.map_err(|e| e.to_string())? {
-        file.write_all(&chunk).await.map_err(|e| e.to_string())?;
-        received += chunk.len() as u64;
-        if total > 0 {
-            let fraction = received as f32 / total as f32;
-            if fraction - reported >= 0.02 {
-                reported = fraction;
-                emit(app, VoiceEvent::Downloading { fraction });
-            }
-        }
-    }
-    file.flush().await.map_err(|e| e.to_string())?;
-    drop(file);
-    if total > 0 && received != total {
-        let _ = tokio::fs::remove_file(&part).await;
-        return Err("the download was cut short".into());
-    }
-    tokio::fs::rename(&part, &path)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(())
 }
 
 #[cfg(test)]
@@ -508,10 +686,19 @@ mod tests {
 
     #[test]
     fn events_match_the_panel() {
-        let json = serde_json::to_value(VoiceEvent::NeedsModel { megabytes: 142 }).unwrap();
+        let json = serde_json::to_value(VoiceEvent::NeedsPack {
+            pack: "voices",
+            megabytes: 212,
+        })
+        .unwrap();
         assert_eq!(
             json,
-            serde_json::json!({"type": "needs-model", "megabytes": 142})
+            serde_json::json!({"type": "needs-pack", "pack": "voices", "megabytes": 212})
+        );
+        let json = serde_json::to_value(VoiceEvent::HandsFree { state: "hearing" }).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({"type": "hands-free", "state": "hearing"})
         );
         let json = serde_json::to_value(VoiceEvent::Heard {
             text: "keep it".into(),
@@ -520,6 +707,64 @@ mod tests {
         assert_eq!(
             json,
             serde_json::json!({"type": "heard", "text": "keep it"})
+        );
+    }
+
+    /// With FRANK_VOICE_DIR holding silero_vad.onnx and test-af_heart.wav,
+    /// follows a real spoken turn: a finished thought goes as soon as the
+    /// developer pauses; a trailing one waits for the end of the turn.
+    #[test]
+    fn hands_free_hears_a_turn() {
+        let Ok(dir) = std::env::var("FRANK_VOICE_DIR") else {
+            return;
+        };
+        let dir = PathBuf::from(dir);
+        let wav = std::fs::read(dir.join("test-af_heart.wav")).unwrap();
+        let speech: Vec<f32> = wav[44..]
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|b| i16::from_le_bytes(*b) as f32 / 32768.0)
+            .collect();
+        let mut clip = vec![0.0; vad::RATE as usize];
+        clip.extend(resample(&speech, 24_000, vad::RATE));
+        clip.extend(vec![0.0; 2 * vad::RATE as usize]);
+
+        let run = |reply: &str| {
+            let mut ear = Ear::new(Silero::load(&dir.join(VAD_FILE)).unwrap());
+            let mut heard = Vec::new();
+            let mut sent = 0;
+            let mut transcribe = |audio: &[f32]| {
+                sent = audio.len();
+                Ok(reply.to_owned())
+            };
+            for chunk in clip.as_chunks::<{ vad::CHUNK }>().0 {
+                ear.hear(chunk, &mut transcribe, &mut heard).unwrap();
+            }
+            (heard, sent)
+        };
+
+        let (heard, sent) = run("Keep it.");
+        assert_eq!(
+            heard,
+            [
+                Heard::State("hearing"),
+                Heard::State("checking"),
+                Heard::Said("Keep it.".into())
+            ]
+        );
+        // All the speech, with a little from before it started.
+        assert!(sent > speech.len() * 2 / 3 * 9 / 10, "{sent}");
+
+        let (heard, _) = run("We could use Redis because");
+        assert_eq!(
+            heard,
+            [
+                Heard::State("hearing"),
+                Heard::State("checking"),
+                Heard::State("hearing"),
+                Heard::Said("We could use Redis because".into())
+            ]
         );
     }
 }

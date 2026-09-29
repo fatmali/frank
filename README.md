@@ -240,6 +240,10 @@ pond, and it's on your laptop.
 
 Run a local model and nothing leaves your machine at all.
 
+Voice is on-device too: Frank hears you with Whisper and Silero, and talks
+with Kokoro, all running on your Mac. Audio is never saved or sent. Only the
+words go to the brain, same as typing them.
+
 ---
 
 ## FAQ
@@ -280,8 +284,8 @@ which case he's just... there. Watching. You asked for this.)
 
 What works today: the menu bar duck, the hotkey (tap to open, hold to
 talk), finding your latest Claude Code plan, reading the files it mentions,
-the read, one call at a time with its trade-offs, talking it through (typed
-or spoken), and copying the note. Brains: Claude Code, GitHub Copilot, the
+the read, one call at a time with its trade-offs, talking it through (typed,
+push-to-talk, or hands-free, with natural voices), and copying the note. Brains: Claude Code, GitHub Copilot, the
 Anthropic and OpenAI APIs (or anything OpenAI-compatible), and Ollama.
 
 ### Try it (macOS, early, unsigned)
@@ -319,3 +323,11 @@ way. Frankly.
 
 [MIT](LICENSE). Do what you like with it. Frank will have opinions, but he
 won't sue.
+
+Frank's ears and voice are other people's good work, downloaded when you
+ask for them, not bundled: [whisper.cpp](https://github.com/ggml-org/whisper.cpp)
+and OpenAI's Whisper (MIT), [Silero VAD](https://github.com/snakers4/silero-vad)
+(MIT), [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache 2.0)
+via [kokoro-onnx](https://github.com/thewh1teagle/kokoro-onnx) (MIT), and
+the [misaki](https://github.com/hexgrad/misaki) pronunciation dictionaries
+(Apache 2.0).

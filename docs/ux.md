@@ -293,10 +293,21 @@ M1.
 
 ### 6.1 How it works
 
-- **Push to talk, never always on.** Hold the hotkey (from any app) or hold
-  `Space` in the panel, talk, let go. A tap still just opens Frank. The
+- **Push to talk.** Hold the hotkey (from any app) or hold `Space` in the
+  panel, talk, let go. A tap of the hotkey still just opens Frank. The
   microphone starts only after the key has been held for a quarter of a
-  second, so a tap never turns it on.
+  second, so a tap never turns it on by accident.
+- **Or talk freely.** Tap `Space` in the panel, or click the microphone, and
+  Frank listens hands-free: no key to hold. He hears when you start talking
+  and when you stop (Silero VAD, on-device). A pause isn't always the end:
+  after 0.7 s of quiet he looks at what you said so far, and if it trails off
+  ("we could use Redis because…", "and the…") he keeps listening; if it
+  sounds finished ("keep it", "why not Redis?") he answers at once. After
+  1.6 s of quiet the turn is over either way. While he thinks and talks he
+  isn't listening, so he never hears himself; then it's your turn again.
+  Tap `Space` while he talks to cut in. `Esc`, a tap on `Space`, hiding the
+  panel, or 45 seconds of nobody talking turns it off. The panel stays open
+  while it's on, and the menu bar icon shows he's listening.
 - **On this Mac, only.** Speech is transcribed on-device (Whisper). Audio
   never leaves the machine and is never saved. Only the words go to the
   brain, like typing them would.
@@ -306,11 +317,12 @@ M1.
   the brain for a one- or two-sentence answer, which is also faster. Typing
   gets text only. A setting chooses: when I talk to him (default), always,
   never. Any key, or talking again, stops him mid-sentence.
-- **A voice worth hearing.** Frank uses the most natural English voice
-  installed (macOS Premium, then Enhanced voices), or the one chosen in
-  Settings, with a Listen button. When only compact voices are installed,
-  Settings says where to get a Premium one. An on-device neural voice
-  (such as Kokoro) is the next step if system voices aren't good enough.
+- **A voice worth hearing.** Natural voices (Kokoro-82M, on this Mac) sound
+  like a person, not a screen reader. Settings, Voice lists them first,
+  each with a Listen button: Michael, Heart, George, Emma, Fenrir, Bella.
+  They're a one-time 212 MB download, offered right there, with progress.
+  Once installed, Michael is the default. Until then, and for anyone who
+  prefers one, the macOS voices are listed after (best installed first).
 - **Fast to hear you.** Transcription runs on the GPU where there is one,
   sizes Whisper's audio window to the clip instead of padding to 30
   seconds, and loads the model while the developer is still talking.
@@ -345,13 +357,18 @@ Anything else is a question or a thought, and goes to Frank.
   transcribed, so a mishearing is obvious. A command shows as a line in the
   footer ("Chose In memory") instead of a turn.
 - **Speaking.** A small "Frank is talking. Any key stops him." line.
+- **Talking freely.** The composer shows the level meter, dimmed while
+  waiting: "Listening. Just talk.", then "Hearing you" while you talk, with
+  a Stop button. While Frank answers: "Your turn when Frank finishes."
+  with a breathing amber dot.
 
 ### 6.4 First use
 
-The first time the developer holds to talk:
+The first time the developer talks to Frank:
 
-1. "Voice runs on this Mac. It needs a 140 MB speech model. Download it?"
-   (`↵` yes, `Esc` not now). A progress line follows.
+1. "Voice runs on this Mac. It needs 150 MB of speech models, downloaded
+   once." (`↵` download, `Esc` not now). A progress line follows; talking
+   freely starts by itself when it's done.
 2. macOS asks for the microphone. If it's refused: "Frank can't hear you.
    Allow the microphone in System Settings, Privacy, Microphone."
 

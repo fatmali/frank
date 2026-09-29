@@ -23,6 +23,10 @@ tokio = { version = "1", features = ["sync", "time", "process", "fs", "io-util"]
 # Voice: microphone capture, on-device transcription, and the model download.
 cpal = "0.18"
 whisper-rs = "0.16"
+# Natural voices (Kokoro) and voice-activity detection (Silero), on ONNX Runtime.
+ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "download-binaries", "tls-native", "copy-dylibs", "api-27"] }
+# Kokoro's voices come as an uncompressed .npz (a zip of .npy arrays).
+zip = { version = "7", default-features = false }
 reqwest = { version = "0.13", default-features = false, features = ["http2", "native-tls", "system-proxy"] }
 
 # Transcription on the Mac's GPU.

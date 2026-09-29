@@ -936,6 +936,48 @@ select {
   transition: height 60ms linear;
 }
 
+.voice-status.hands-free {
+  cursor: default;
+}
+
+.voice-status.hands-free .text-button {
+  margin-left: auto;
+  font-weight: var(--weight-regular);
+}
+
+/* Waiting for you: the meter rests, dimmed, so the mic is plainly on. */
+.hands-free.waiting .meter span {
+  opacity: 0.45;
+}
+
+.hands-free.paused {
+  color: var(--ink-muted);
+  font-weight: var(--weight-regular);
+}
+
+.hands-free-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--duck);
+  animation: breathe 1.6s var(--ease) infinite alternate;
+}
+
+@keyframes breathe {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hands-free-dot {
+    animation: none;
+  }
+}
+
 .download-bar {
   position: absolute;
   left: 0;
@@ -1231,6 +1273,46 @@ select {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+.voice-picker {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.voice-picker legend {
+  padding: 0 0 var(--space-1);
+}
+
+.voice-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 28px;
+}
+
+.voice-row label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.voice-row label:has(input:disabled) {
+  color: var(--ink-muted);
+}
+
+.voice-download {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: var(--space-1) 0 var(--space-2);
+  padding-bottom: var(--space-1);
 }
 
 .trusted {

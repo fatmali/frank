@@ -22,7 +22,9 @@ import {
   type Config,
   type FailureKind,
   type Gathered,
+  type HandsFree,
   type Host,
+  type Pack,
   type VoiceEvent,
 } from './host.ts';
 import { SAMPLE_FILES, SAMPLE_ORIGIN, samplePlan } from './sample.ts';
@@ -46,8 +48,8 @@ export type VoiceState =
   | { state: 'listening'; level: number }
   | { state: 'transcribing' }
   | { state: 'speaking' }
-  | { state: 'needs-model'; megabytes: number }
-  | { state: 'downloading'; fraction: number };
+  /** Asking to download a pack; nothing was recorded. */
+  | { state: 'needs-pack'; pack: Pack; megabytes: number };
 
 export interface PanelState {
   view: View;
@@ -89,6 +91,10 @@ export interface PanelState {
   note: string;
   progress: { made: number; total: number };
   voice: VoiceState;
+  /** Hands-free conversation, while it's on (ux.md §6.1). */
+  handsFree: { state: HandsFree; level: number } | undefined;
+  /** Packs downloading now, with how far along they are. */
+  downloads: Partial<Record<Pack, number>>;
   /** What went wrong with voice, in words the developer can act on. */
   voiceError: string | undefined;
 }
@@ -140,6 +146,8 @@ export class PanelController {
     note: '',
     progress: { made: 0, total: 0 },
     voice: { state: 'off' },
+    handsFree: undefined,
+    downloads: {},
     voiceError: undefined,
   };
   private listeners = new Set<() => void>();
@@ -694,6 +702,7 @@ export class PanelController {
 
   /** Holding Space in the panel. */
   async startTalking(): Promise<void> {
+    if (this.state.handsFree) return;
     if (this.state.voice.state === 'speaking') void this.host.stopSpeaking();
     await this.host.voiceStart();
   }
@@ -702,12 +711,37 @@ export class PanelController {
     if (this.state.voice.state === 'listening') await this.host.voiceStop();
   }
 
-  async downloadVoiceModel(): Promise<void> {
-    this.set({ voice: { state: 'downloading', fraction: 0 }, voiceError: undefined });
-    await this.host.downloadVoiceModel();
+  /** Tapping Space, or the microphone: talk freely, or stop. */
+  async toggleHandsFree(): Promise<void> {
+    // While Frank is answering, a tap cuts him short: your turn.
+    if (this.state.handsFree && this.state.voice.state === 'speaking')
+      return this.stopSpeaking();
+    if (this.state.handsFree) return this.stopHandsFree();
+    this.wantsHandsFree = true;
+    if (this.state.voice.state === 'speaking') this.stopSpeaking();
+    this.set({ voiceError: undefined });
+    await this.host.handsFreeStart();
   }
 
-  declineVoiceModel(): void {
+  async stopHandsFree(): Promise<void> {
+    this.wantsHandsFree = false;
+    await this.host.handsFreeStop();
+  }
+
+  /** Set when hands-free is waiting on the listening pack to download. */
+  private wantsHandsFree = false;
+
+  async downloadPack(pack: Pack): Promise<void> {
+    this.set({
+      downloads: { ...this.state.downloads, [pack]: 0 },
+      voiceError: undefined,
+      ...(this.state.voice.state === 'needs-pack' ? { voice: { state: 'off' } } : {}),
+    });
+    await this.host.downloadPack(pack);
+  }
+
+  declinePack(): void {
+    this.wantsHandsFree = false;
     this.set({ voice: { state: 'off' } });
   }
 
@@ -717,6 +751,16 @@ export class PanelController {
     this.set({ voice: { state: 'off' } });
   }
 
+  /** Hands-free, after Frank has had his say: the developer's turn again. */
+  private yourTurn(): void {
+    if (
+      this.state.handsFree?.state === 'paused' &&
+      this.state.voice.state !== 'speaking' &&
+      !this.state.streaming
+    )
+      void this.host.handsFreeResume();
+  }
+
   private onVoice(e: VoiceEvent): void {
     switch (e.type) {
       case 'listening':
@@ -724,7 +768,9 @@ export class PanelController {
         this.setMood('listening');
         return;
       case 'level':
-        if (this.state.voice.state === 'listening')
+        if (this.state.handsFree)
+          this.set({ handsFree: { ...this.state.handsFree, level: e.level } });
+        else if (this.state.voice.state === 'listening')
           this.set({ voice: { state: 'listening', level: e.level } });
         return;
       case 'transcribing':
@@ -732,6 +778,10 @@ export class PanelController {
         this.setMood('thinking');
         return;
       case 'heard':
+        if (this.state.handsFree) {
+          void this.send(e.text, true).finally(() => this.yourTurn());
+          return;
+        }
         this.set({ voice: { state: 'off' } });
         this.setMood(this.restingMood());
         if (e.text.trim()) void this.send(e.text, true);
@@ -741,19 +791,46 @@ export class PanelController {
         this.set({ voice: { state: 'off' }, voiceError: e.message });
         this.setMood(this.restingMood());
         return;
-      case 'needs-model':
-        this.set({ voice: { state: 'needs-model', megabytes: e.megabytes } });
+      case 'needs-pack':
+        this.set({
+          voice: { state: 'needs-pack', pack: e.pack, megabytes: e.megabytes },
+        });
         this.setMood(this.restingMood());
         return;
       case 'downloading':
-        this.set({ voice: { state: 'downloading', fraction: e.fraction } });
+        this.set({ downloads: { ...this.state.downloads, [e.pack]: e.fraction } });
         return;
-      case 'model-ready':
-        this.set({ voice: { state: 'off' } });
-        this.flash('Voice is ready. Hold to talk.');
+      case 'pack-ready': {
+        const downloads = { ...this.state.downloads };
+        delete downloads[e.pack];
+        this.set({ downloads });
+        if (e.pack === 'voices') {
+          this.flash('Natural voices are ready.');
+        } else if (this.wantsHandsFree) {
+          void this.toggleHandsFree();
+        } else {
+          this.flash('Voice is ready. Hold Space to talk, or tap it to talk freely.');
+        }
         return;
+      }
       case 'spoken':
         if (this.state.voice.state === 'speaking') this.set({ voice: { state: 'off' } });
+        this.yourTurn();
+        return;
+      case 'hands-free':
+        if (e.state === 'off') {
+          this.wantsHandsFree = false;
+          this.set({ handsFree: undefined });
+          void this.host.setPinned(this.state.view.name === 'no-plan');
+          this.setMood(this.restingMood());
+          return;
+        }
+        if (!this.state.handsFree) void this.host.setPinned(true);
+        this.set({
+          handsFree: { state: e.state, level: this.state.handsFree?.level ?? 0 },
+          voiceError: undefined,
+        });
+        if (e.state !== 'paused') this.setMood('listening');
         return;
     }
   }
@@ -780,7 +857,8 @@ export class PanelController {
   /** Esc: backs out of whatever is open, else closes the panel. Nothing is lost. */
   async close(): Promise<void> {
     if (this.state.voice.state === 'speaking') return this.stopSpeaking();
-    if (this.state.voice.state === 'needs-model') return this.declineVoiceModel();
+    if (this.state.voice.state === 'needs-pack') return this.declinePack();
+    if (this.state.handsFree) return this.stopHandsFree();
     if (this.state.changing) return this.cancelChange();
     if (this.state.pickerOpen) return this.togglePicker(false);
     if (this.state.settingsOpen) return this.closeSettings();
@@ -794,7 +872,9 @@ export class PanelController {
 
   closeSettings(): void {
     this.set({ settingsOpen: false });
-    void this.host.setPinned(this.state.view.name === 'no-plan');
+    void this.host.setPinned(
+      this.state.view.name === 'no-plan' || !!this.state.handsFree,
+    );
     void this.reloadConfig();
   }
 

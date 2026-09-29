@@ -55,6 +55,7 @@ async function main() {
       live: true,
       firstRun: params.has('first-run'),
       voiceModel: params.get('voice-model') !== 'no',
+      naturalVoices: params.has('natural-voices'),
       onNextUtterance: (next) => {
         nextLine = next;
         if (controller) render(controller);

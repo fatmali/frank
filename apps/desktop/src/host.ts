@@ -28,16 +28,29 @@ export interface Config {
   sticky: { enabled: boolean; position?: [number, number] };
   plans: { window_minutes: number };
   context: { max_file_kb: number; trusted_projects: string[] };
-  /** `name`: the system voice; empty or missing means the best one installed. */
+  /**
+   * `name`: `natural:<id>` or `system:<name>`; empty or missing means the best
+   * available (a natural voice once they're downloaded).
+   */
   voice: { talk_back: TalkBack; name?: string };
 }
 
-/** An installed system voice (Settings, Voice). */
-export interface SystemVoice {
+/** A voice Frank can speak with (Settings, Voice). */
+export interface VoiceChoice {
+  /** What goes in `config.voice.name`. */
+  id: string;
   name: string;
-  language: string;
-  quality: 'premium' | 'enhanced' | 'standard';
+  description: string;
+  /** Natural voices run on this Mac once the voice pack is downloaded. */
+  kind: 'natural' | 'system';
+  installed: boolean;
 }
+
+/** The models behind voice, each downloaded once, with consent. */
+export type Pack = 'listening' | 'voices';
+
+/** Hands-free: waiting for you, hearing you, checking you've finished, or paused while Frank answers. */
+export type HandsFree = 'waiting' | 'hearing' | 'checking' | 'paused';
 
 /** When Frank speaks his replies (ux.md §6.1). */
 export type TalkBack = 'when-spoken' | 'always' | 'never';
@@ -50,12 +63,13 @@ export type VoiceEvent =
   | { type: 'transcribing' }
   | { type: 'heard'; text: string }
   | { type: 'failed'; message: string }
-  /** Voice needs the speech model first; nothing was recorded. */
-  | { type: 'needs-model'; megabytes: number }
-  | { type: 'downloading'; fraction: number }
-  | { type: 'model-ready' }
+  /** A pack has to be downloaded first; nothing was recorded. */
+  | { type: 'needs-pack'; pack: Pack; megabytes: number }
+  | { type: 'downloading'; pack: Pack; fraction: number }
+  | { type: 'pack-ready'; pack: Pack }
   /** Frank finished (or stopped) speaking. */
-  | { type: 'spoken' };
+  | { type: 'spoken' }
+  | { type: 'hands-free'; state: HandsFree | 'off' };
 
 export interface Gathered {
   files: FileContext[];
@@ -105,12 +119,17 @@ export interface Host {
   voiceStart(): Promise<void>;
   /** Stops listening and transcribes; the words arrive as a "heard" event. */
   voiceStop(): Promise<void>;
-  downloadVoiceModel(): Promise<void>;
+  /** Hands-free: Frank listens, and hears for himself when you've finished. */
+  handsFreeStart(): Promise<void>;
+  /** Frank has answered; listen again. */
+  handsFreeResume(): Promise<void>;
+  handsFreeStop(): Promise<void>;
+  downloadPack(pack: Pack): Promise<void>;
   /** Adds a sentence to what Frank is saying. */
   speak(text: string): Promise<void>;
   stopSpeaking(): Promise<void>;
-  listVoices(): Promise<SystemVoice[]>;
-  previewVoice(name: string): Promise<void>;
+  listVoices(): Promise<VoiceChoice[]>;
+  previewVoice(id: string): Promise<void>;
   onVoice(handler: (event: VoiceEvent) => void): void;
 }
 

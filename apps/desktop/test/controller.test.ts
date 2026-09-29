@@ -168,14 +168,21 @@ describe('talking to Frank', () => {
     expect(host.calls.some((x) => x.startsWith('speak'))).toBe(false);
   });
 
-  it('asks before downloading the speech model', async () => {
+  it('asks before downloading the speech models', async () => {
     const { c } = await startSession({ voiceModel: false });
     c.beginCalls();
     await c.startTalking();
-    expect(c.getSnapshot().voice).toEqual({ state: 'needs-model', megabytes: 142 });
-    await c.downloadVoiceModel();
-    await settle(c, (x) => x.getSnapshot().voice.state === 'off');
-    expect(c.getSnapshot().flash).toBe('Voice is ready. Hold to talk.');
+    expect(c.getSnapshot().voice).toEqual({
+      state: 'needs-pack',
+      pack: 'listening',
+      megabytes: 150,
+    });
+    await c.downloadPack('listening');
+    await settle(c, (x) => x.getSnapshot().downloads.listening === undefined);
+    expect(c.getSnapshot().voice.state).toBe('off');
+    expect(c.getSnapshot().flash).toBe(
+      'Voice is ready. Hold Space to talk, or tap it to talk freely.',
+    );
   });
 
   it('says what to say when it heard nothing', async () => {
@@ -301,5 +308,60 @@ describe('around the session', () => {
     expect(host.calls).not.toContain('hide');
     await c.close();
     expect(host.calls).toContain('hide');
+  });
+});
+
+describe('talking freely', () => {
+  const speaks = (host: { calls: string[] }) =>
+    host.calls.filter((x) => x.startsWith('speak')).length;
+
+  it('hears a thought, answers out loud, then listens again', async () => {
+    const { host, c } = await startSession({ utterances: ['What would you do?'] });
+    c.beginCalls();
+    await c.toggleHandsFree();
+    await settle(c, (x) => x.getSnapshot().turns.length === 2);
+    expect(speaks(host)).toBeGreaterThan(0);
+    // Frank's turn is over once he's said it; then it's the developer's.
+    await settle(c, (x) => x.getSnapshot().handsFree?.state === 'waiting');
+    expect(host.calls.filter((x) => x === 'handsFreeResume')).toHaveLength(1);
+    expect(host.calls.indexOf('handsFreeResume')).toBeGreaterThan(
+      host.calls.findLastIndex((x) => x.startsWith('speak')),
+    );
+  });
+
+  it('acts on a command and listens again straight away', async () => {
+    const { host, c } = await startSession({ utterances: ['no', 'take it'] });
+    c.beginCalls();
+    await c.toggleHandsFree();
+    await settle(c, (x) => x.getSnapshot().selected === '2');
+    expect(c.getSnapshot().calls[0]!.outcome).toMatchObject({ option: 2 });
+    await settle(c, (x) => x.getSnapshot().handsFree?.state === 'waiting');
+    expect(speaks(host)).toBe(0);
+  });
+
+  it('stops on Esc, and again on a tap', async () => {
+    const { host, c } = await startSession({ utterances: [] });
+    c.beginCalls();
+    await c.toggleHandsFree();
+    await settle(c, (x) => x.getSnapshot().handsFree?.state === 'waiting');
+    await c.close();
+    await settle(c, (x) => x.getSnapshot().handsFree === undefined);
+    expect(host.calls).not.toContain('hide');
+    await c.toggleHandsFree();
+    await settle(c, (x) => x.getSnapshot().handsFree !== undefined);
+    await c.toggleHandsFree();
+    await settle(c, (x) => x.getSnapshot().handsFree === undefined);
+  });
+
+  it('starts by itself once the speech models are downloaded', async () => {
+    const { c } = await startSession({ voiceModel: false, utterances: [] });
+    c.beginCalls();
+    await c.toggleHandsFree();
+    expect(c.getSnapshot().voice).toMatchObject({
+      state: 'needs-pack',
+      pack: 'listening',
+    });
+    await c.downloadPack('listening');
+    await settle(c, (x) => x.getSnapshot().handsFree?.state === 'waiting');
   });
 });

@@ -146,6 +146,7 @@ pub fn on_window_event(window: &tauri::Window, event: &WindowEvent) {
             let state = app.state::<AppState>();
             if !*lock(&state.pinned) && window.is_visible().unwrap_or(false) {
                 *lock(&state.hidden_on_blur) = Some(Instant::now());
+                app.state::<Voice>().hands_free_stop();
                 let _ = window.hide();
             }
         }
@@ -291,6 +292,8 @@ pub fn show_panel(app: &AppHandle, anchor: Anchor) {
 /// Hides the panel. With no sticky Frank on screen, the whole app hides too,
 /// which hands focus back to the app the developer was in.
 pub fn hide_panel(app: &AppHandle) {
+    // Out of sight, the microphone goes off.
+    app.state::<Voice>().hands_free_stop();
     if let Some(panel) = panel(app) {
         let _ = panel.hide();
     }

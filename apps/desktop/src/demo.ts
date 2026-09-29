@@ -151,8 +151,10 @@ export interface DemoOptions {
   failure?: BrainFailure;
   firstRun?: boolean;
   plans?: Plan[];
-  /** Whether the speech model is already downloaded. */
+  /** Whether the speech models are already downloaded. */
   voiceModel?: boolean;
+  /** Whether the natural voices are already downloaded. */
+  naturalVoices?: boolean;
   /** What the pretend microphone hears, in turn. */
   utterances?: string[];
   /** In a browser: speak with the browser's voice, and copy to the real clipboard. */
@@ -189,6 +191,24 @@ export function demoHost(
   const voiceHandlers: ((e: VoiceEvent) => void)[] = [];
   const voice = (e: VoiceEvent) => voiceHandlers.forEach((h) => h(e));
   let hasModel = opts.voiceModel ?? true;
+  let hasNatural = opts.naturalVoices ?? false;
+  // Hands-free: the pretend microphone hears the next line a moment after
+  // Frank is ready to listen.
+  let handsFree = false;
+  let turn: ReturnType<typeof setTimeout> | undefined;
+  const listenFreely = () => {
+    voice({ type: 'hands-free', state: 'waiting' });
+    if (!utterances.length) return;
+    turn = setTimeout(() => {
+      voice({ type: 'hands-free', state: 'hearing' });
+      turn = setTimeout(() => {
+        voice({ type: 'hands-free', state: 'checking' });
+        voice({ type: 'hands-free', state: 'paused' });
+        voice({ type: 'heard', text: utterances.shift() ?? '' });
+        announce();
+      }, delay * 40);
+    }, delay * 30);
+  };
   const utterances = [...(opts.utterances ?? DEMO_SCRIPT)];
   const announce = () => opts.onNextUtterance?.(utterances[0]);
   announce();
@@ -326,7 +346,7 @@ export function demoHost(
     onFileDrop() {},
     async voiceStart() {
       if (!hasModel) {
-        voice({ type: 'needs-model', megabytes: 142 });
+        voice({ type: 'needs-pack', pack: 'listening', megabytes: 150 });
         return;
       }
       log('voiceStart');
@@ -345,13 +365,36 @@ export function demoHost(
       voice({ type: 'heard', text: utterances.shift() ?? '' });
       announce();
     },
-    async downloadVoiceModel() {
-      for (const fraction of [0.2, 0.55, 0.9, 1]) {
-        if (delay) await sleep(delay * 8);
-        voice({ type: 'downloading', fraction });
+    async handsFreeStart() {
+      if (!hasModel) {
+        voice({ type: 'needs-pack', pack: 'listening', megabytes: 150 });
+        return;
       }
-      hasModel = true;
-      voice({ type: 'model-ready' });
+      if (handsFree) return;
+      handsFree = true;
+      log('handsFreeStart');
+      listenFreely();
+    },
+    async handsFreeResume() {
+      if (!handsFree) return;
+      log('handsFreeResume');
+      listenFreely();
+    },
+    async handsFreeStop() {
+      if (!handsFree) return;
+      handsFree = false;
+      clearTimeout(turn);
+      log('handsFreeStop');
+      voice({ type: 'hands-free', state: 'off' });
+    },
+    async downloadPack(pack) {
+      for (const fraction of [0.2, 0.55, 0.9]) {
+        if (delay) await sleep(delay * 8);
+        voice({ type: 'downloading', pack, fraction });
+      }
+      if (pack === 'listening') hasModel = true;
+      else hasNatural = true;
+      voice({ type: 'pack-ready', pack });
     },
     async speak(text) {
       log(`speak ${text}`);
@@ -371,11 +414,25 @@ export function demoHost(
       if (opts.live) globalThis.speechSynthesis?.cancel();
     },
     async listVoices() {
-      return [
-        { name: 'Ava (Premium)', language: 'en-US', quality: 'premium' },
-        { name: 'Zoe (Enhanced)', language: 'en-US', quality: 'enhanced' },
-        { name: 'Samantha', language: 'en-US', quality: 'standard' },
-      ];
+      const natural = [
+        ['am_michael', 'Michael', 'American, calm'],
+        ['af_heart', 'Heart', 'American, warm'],
+        ['bm_george', 'George', 'British, dry'],
+      ].map(([id, name, description]) => ({
+        id: `natural:${id}`,
+        name: name!,
+        description: description!,
+        kind: 'natural' as const,
+        installed: hasNatural,
+      }));
+      const system = ['Ava (Premium)', 'Samantha'].map((name) => ({
+        id: `system:${name}`,
+        name,
+        description: 'macOS',
+        kind: 'system' as const,
+        installed: true,
+      }));
+      return [...natural, ...system];
     },
     async previewVoice(name) {
       log(`preview ${name}`);
