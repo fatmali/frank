@@ -52,14 +52,40 @@ export interface Evidence {
 }
 
 export type Outcome =
-  { verdict: 'keep' } | { verdict: 'change'; detail: string } | { verdict: 'drop' };
+  | { verdict: 'keep' }
+  /** `option` is set when the change is one of the call's options (1-based). */
+  | { verdict: 'change'; detail: string; option?: number }
+  | { verdict: 'drop' };
+
+/** One way to make a call. A call's first option is always the plan's own choice. */
+export interface Option {
+  /** A few words: "Redis", "In memory". */
+  label: string;
+  /** What it buys, in a few words. */
+  gain: string;
+  /** What it costs, in a few words. */
+  cost: string;
+  /** What the agent should do, as one instruction. */
+  instruction: string;
+}
+
+/** The one fact about the developer's situation that decides a call. */
+export interface Hinge {
+  question: string;
+  /** Each answer leads to an option (1-based). */
+  answers: { answer: string; option: number }[];
+}
 
 /** A decision inside the plan that deserves a second look. */
 export interface Call {
   /** "1".."5", in ranked order. */
   id: string;
-  /** Short title in the developer's language, e.g. "Store counts in Redis". */
+  /** Short title in the developer's language, e.g. "Counter storage". */
   title: string;
+  /** The decision as a plain question: "Where should the counters live?" */
+  question: string;
+  /** Why it matters, in one sentence. Empty when the brain didn't say. */
+  stakes: string;
   kind: CallKind;
   /** The plan's own words for this call. Empty when they couldn't be found in the plan. */
   planQuote: string;
@@ -67,13 +93,25 @@ export interface Call {
   quoteSpan?: { start: number; end: number };
   /** What the plan does. */
   planChoice: string;
-  /** Realistic alternatives. */
+  /** Realistic alternatives, by label. */
   alternatives: string[];
+  /** The plan's choice first, then one or two alternatives. */
+  options: Option[];
+  hinge?: Hinge;
   undoCost: UndoCost;
   /** True only when the provided code contradicts the plan. */
   contradicted: boolean;
   evidence: Evidence[];
   outcome?: Outcome;
+}
+
+/** Frank's first take on a plan: what it does, what needs the developer, what's fine. */
+export interface Read {
+  /** What the plan does, in one sentence. */
+  gist: string;
+  calls: Call[];
+  /** Things Frank checked and found fine. */
+  fine: string[];
 }
 
 export interface Turn {

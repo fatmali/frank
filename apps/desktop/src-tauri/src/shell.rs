@@ -1,6 +1,7 @@
 //! The menu bar icon, the hotkey, and where Frank's windows go.
 
 use crate::state::{AppState, lock};
+use crate::voice::Voice;
 use serde::Deserialize;
 use std::time::{Duration, Instant};
 use tauri::image::Image;
@@ -17,12 +18,15 @@ const STICKY_SIZE: f64 = 76.0;
 /// A click on the menu bar icon hides the panel (it loses focus) before the
 /// click itself arrives. Within this window, that click doesn't reopen it.
 const BLUR_CLICK_GRACE: Duration = Duration::from_millis(300);
+/// How long the hotkey must be held before Frank starts listening.
+const HOLD_TO_TALK: Duration = Duration::from_millis(250);
 
-/// Frank's moods (docs/ux.md §6.5). Listening arrives with voice, in M3.
+/// Frank's moods (docs/ux.md §8.5).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Mood {
     Idle,
+    Listening,
     Thinking,
     Judging,
     Done,
@@ -32,6 +36,7 @@ impl Mood {
     fn tray_icon(self) -> &'static [u8] {
         match self {
             Mood::Idle => include_bytes!("../icons/tray/idle.png"),
+            Mood::Listening => include_bytes!("../icons/tray/listening.png"),
             Mood::Thinking => include_bytes!("../icons/tray/thinking.png"),
             Mood::Judging => include_bytes!("../icons/tray/judging.png"),
             Mood::Done => include_bytes!("../icons/tray/done.png"),
@@ -179,9 +184,52 @@ fn save_sticky_position(app: &AppHandle, position: PhysicalPosition<i32>) {
 
 // ---------------------------------------------------------------- hotkey
 
+/// Tap the hotkey to open or close Frank; hold it to talk (docs/ux.md §6.1).
+/// The microphone starts only once the key has been held a moment, so a tap
+/// never turns it on.
 pub fn on_shortcut(app: &AppHandle, _shortcut: &Shortcut, event: ShortcutEvent) {
-    if event.state() == ShortcutState::Pressed {
-        toggle_panel(app, Anchor::Auto);
+    let state = app.state::<AppState>();
+    match event.state() {
+        ShortcutState::Pressed => {
+            let press = {
+                let mut hotkey = lock(&state.hotkey);
+                if hotkey.down {
+                    return; // key repeat
+                }
+                hotkey.down = true;
+                hotkey.holding = false;
+                hotkey.presses += 1;
+                hotkey.presses
+            };
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(HOLD_TO_TALK).await;
+                let state = app.state::<AppState>();
+                {
+                    let mut hotkey = lock(&state.hotkey);
+                    if !hotkey.down || hotkey.presses != press {
+                        return;
+                    }
+                    hotkey.holding = true;
+                }
+                if !panel(&app).is_some_and(|p| p.is_visible().unwrap_or(false)) {
+                    show_panel(&app, Anchor::Auto);
+                }
+                app.state::<Voice>().start(&app);
+            });
+        }
+        ShortcutState::Released => {
+            let holding = {
+                let mut hotkey = lock(&state.hotkey);
+                hotkey.down = false;
+                std::mem::take(&mut hotkey.holding)
+            };
+            if holding {
+                app.state::<Voice>().stop(app);
+            } else {
+                toggle_panel(app, Anchor::Auto);
+            }
+        }
     }
 }
 

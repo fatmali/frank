@@ -20,7 +20,11 @@ looks and behaves.
   - the latest Claude Code plan, found automatically;
   - pasted text;
   - a dropped file.
-- The session: calls, talking each one through, and the note for the agent.
+- The session: the read, one call at a time (options with their gains and
+  costs, and what it comes down to), talking it through, and the note for
+  the agent.
+- Voice: push-to-talk with on-device transcription, spoken replies, and
+  instant commands.
 - Reading the files the plan mentions, as evidence.
 - Brains:
   - Claude Code, running the user's installed `claude` in headless mode;
@@ -30,7 +34,6 @@ looks and behaves.
 
 **Not in M1:**
 - Cursor and Codex plan finders, and the Cursor brain (M2).
-- Voice (M3).
 - Session history and handing the note straight back to the agent (M4).
 - Windows and Linux builds (M4).
 - Code signing and notarization (before the public release).
@@ -76,7 +79,9 @@ Every task ends with something that runs or is tested.
 | B1 | Types: `Plan`, `Call`, `Session`, `Brain` interface, events | Types compile and match design.md §5.3 |
 | B2 | Frank's system prompt, following the voice rules in ux.md §3 | Prompt file reviewed against the do/don't table |
 | B3 | Breakdown: prompt, JSON schema, validation, one repair attempt, plain-list fallback | Tests cover valid, malformed, repaired and fallback output |
-| B4 | Talk-through loop: one call at a time; keep, change, drop and "what would you do"; streaming turns | Tests drive a full session with a scripted fake brain |
+| B3b | The read: gist, what's fine, and per call a question, why it matters, options with gain and cost, and what it comes down to; streamed, so calls show as they arrive | Tests parse partial output and the full shape; older output still works |
+| B4 | Talk-through loop: one call at a time; choose an option, answer the hinge, drop, skip, and "what would you do"; streaming turns; Frank's suggested option | Tests drive a full session with a scripted fake brain |
+| B4b | Commands from speech or text: keep, option by number or name, hinge answers, drop, next, back, Frank's take, copy the note | Table-driven tests |
 | B5 | Note for the agent, built from the outcomes, phrased for the source agent | Snapshot tests for Claude Code and Copilot wording |
 | B6 | Context budget: plan first, then evidence, then repo summary; trim the largest files first | Tests keep the prompt under the budget for large plans |
 | B7 | Fixture plans: 10–20 real plans with their key calls labelled | Stored under `packages/engine/fixtures/` |
@@ -113,7 +118,8 @@ Every task ends with something that runs or is tested.
 | D9 | Sticky mode (off by default): always-on-top duck, drag, remembered position | Toggled from the menu and settings |
 | D10 | Design tokens as CSS variables (ux.md §6), bundled Monaspace Neon and Radon | No hard-coded colours or radii in components |
 | D11 | Motion: the marking moment, the note nod; reduced-motion variants | Matches ux.md §6.6 |
-| D12 | Settings: brain, hotkey, sticky mode, plan window, per-project context trust | Changes persist to `config.toml` |
+| D12 | Settings: brain, hotkey, sticky mode, plan window, per-project context trust, talk back | Changes persist to `config.toml` |
+| D13 | Voice: hold-to-talk on the hotkey and `Space`, microphone capture, on-device Whisper transcription with a consented model download, spoken replies, listening states | Capture and resampling tested; transcription and speech smoke-tested on a Mac |
 
 ### E. Finish
 

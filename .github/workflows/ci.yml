@@ -54,6 +54,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: pnpm install --frozen-lockfile
       - run: cargo clippy -p frank-desktop --all-targets -- -D warnings
+      - run: cargo test -p frank-desktop
       - run: pnpm --filter @frank/desktop tauri build --bundles app
       # Zip with ditto so the app keeps its permissions and structure.
       - run: ditto -c -k --keepParent target/release/bundle/macos/Frank.app Frank-macos.zip

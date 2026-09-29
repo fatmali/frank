@@ -15,6 +15,7 @@ import {
   type FailureKind,
   type Gathered,
   type Host,
+  type VoiceEvent,
 } from './host.ts';
 import type { Mood } from './duck.ts';
 
@@ -68,6 +69,14 @@ export const tauriHost: Host = {
   },
   onOpenSettings(handler) {
     void listen('open-settings', handler);
+  },
+  voiceStart: () => invoke('voice_start'),
+  voiceStop: () => invoke('voice_stop'),
+  downloadVoiceModel: () => invoke('voice_download_model'),
+  speak: (text) => invoke('speak', { text }),
+  stopSpeaking: () => invoke('stop_speaking'),
+  onVoice(handler) {
+    void listen<VoiceEvent>('voice', (e) => handler(e.payload));
   },
   onFileDrop(handler) {
     void getCurrentWebview().onDragDropEvent((event) => {

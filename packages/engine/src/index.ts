@@ -7,8 +7,11 @@ export {
   locateQuote,
   extractJson,
   MAX_CALLS,
+  parsePartialRead,
   type BreakdownResult,
+  type PartialRead,
 } from './breakdown.ts';
-export { Session } from './session.ts';
+export { Session, splitSuggestion } from './session.ts';
+export { parseCommand, type Command } from './commands.ts';
 export { composeNote, copiedMessage, agentName } from './note.ts';
 export { fitToBudget, contextSize } from './budget.ts';

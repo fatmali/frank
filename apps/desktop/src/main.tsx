@@ -43,6 +43,7 @@ async function main() {
     const { demoHost } = await import('./demo.ts');
     host = demoHost({
       firstRun: params.has('first-run'),
+      voiceModel: params.get('voice-model') !== 'no',
       ...(params.has('no-plan') ? { plans: [] } : {}),
       ...(params.has('signed-out')
         ? {

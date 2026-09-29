@@ -1,4 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { displayHotkey } from '../format.ts';
+import { Kbd } from './Kbd.tsx';
 import { useController, usePanel } from './store.ts';
 
 export interface ComposerHandle {
@@ -6,12 +8,19 @@ export interface ComposerHandle {
   isEmpty(): boolean;
 }
 
-/** One line that grows as you type. Enter sends; Shift+Enter adds a line. */
+const METER_BARS = 28;
+
+/**
+ * One line that grows as you type, or a live level meter while you talk.
+ * Enter sends; Shift+Enter adds a line; hold Space (when empty) to talk.
+ */
 export const Composer = forwardRef<ComposerHandle>(function Composer(_, ref) {
   const c = useController();
-  const { view, calls, changing, streaming, selected } = usePanel();
+  const { view, changing, streaming, selected, voice, voiceError, config, reading } =
+    usePanel();
   const [text, setText] = useState('');
   const input = useRef<HTMLTextAreaElement>(null);
+  const [levels, setLevels] = useState<number[]>(() => Array(METER_BARS).fill(0));
 
   useImperativeHandle(ref, () => ({
     focus: () => input.current?.focus(),
@@ -29,13 +38,83 @@ export const Composer = forwardRef<ComposerHandle>(function Composer(_, ref) {
     el.style.height = `${el.scrollHeight}px`;
   }, [text]);
 
+  // The meter scrolls: each new level pushes the oldest out.
+  const level = voice.state === 'listening' ? voice.level : undefined;
+  useEffect(() => {
+    if (level === undefined) {
+      setLevels(Array(METER_BARS).fill(0));
+      return;
+    }
+    setLevels((l) => [...l.slice(1), level]);
+  }, [level]);
+
+  const hotkey = displayHotkey(config?.hotkey ?? 'Alt+Shift+Space');
+
+  if (voice.state === 'needs-model') {
+    return (
+      <div
+        className="composer voice-consent"
+        role="dialog"
+        aria-label="Download the speech model"
+      >
+        <p>
+          Voice runs on this Mac. It needs a {voice.megabytes} MB speech model, downloaded
+          once. Your voice never leaves this Mac.
+        </p>
+        <div className="state-actions">
+          <button className="text-button" onClick={() => c.declineVoiceModel()}>
+            Not now <Kbd>esc</Kbd>
+          </button>
+          <button
+            className="button primary"
+            autoFocus
+            onClick={() => void c.downloadVoiceModel()}
+          >
+            Download <Kbd>↵</Kbd>
+          </button>
+        </div>
+      </div>
+    );
+  }
+  if (voice.state === 'downloading') {
+    return (
+      <div className="composer voice-status" role="status">
+        <span>Downloading the speech model, {Math.round(voice.fraction * 100)}%</span>
+        <span className="download-bar" style={{ width: `${voice.fraction * 100}%` }} />
+      </div>
+    );
+  }
+  if (voice.state === 'listening' || voice.state === 'transcribing') {
+    return (
+      <div
+        className="composer voice-status listening"
+        role="status"
+        onClick={() => void c.stopTalking()}
+      >
+        <span className="meter" aria-hidden="true">
+          {levels.map((l, i) => (
+            <span
+              key={i}
+              style={{ height: `${Math.max(8, Math.min(1, l * 1.6) * 100)}%` }}
+            />
+          ))}
+        </span>
+        <span>
+          {voice.state === 'listening' ? 'Listening. Let go to send.' : 'Got it.'}
+        </span>
+      </div>
+    );
+  }
+
   const placeholder = changing
     ? 'What should the agent do instead?'
-    : view.name === 'no-plan'
-      ? 'Paste a plan here, or drop a file'
-      : calls.length
-        ? `Ask Frank, or press 1–${calls.length}`
-        : 'Ask Frank';
+    : reading
+      ? 'Frank is still reading'
+      : view.name === 'no-plan'
+        ? 'Paste a plan here, or drop a file'
+        : view.name === 'call'
+          ? `Ask about this, or hold Space to talk`
+          : `Ask about the plan, or hold ${hotkey} to talk`;
 
   const send = () => {
     const t = text.trim();
@@ -48,30 +127,63 @@ export const Composer = forwardRef<ComposerHandle>(function Composer(_, ref) {
     <div className={changing ? 'composer changing' : 'composer'}>
       {changing && (
         <p className="composer-hint">
-          <span>Changing call {selected}. Say what the agent should do instead.</span>
+          <span>Call {selected}, in your words: what should the agent do?</span>
           <span>esc to cancel</span>
         </p>
       )}
-      <textarea
-        ref={input}
-        rows={1}
-        value={text}
-        placeholder={placeholder}
-        aria-label={placeholder}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (
-            e.key === 'Enter' &&
-            !e.shiftKey &&
-            !e.metaKey &&
-            !e.ctrlKey &&
-            !e.nativeEvent.isComposing
-          ) {
-            e.preventDefault();
-            send();
-          }
-        }}
-      />
+      {voiceError && !changing && <p className="composer-hint error">{voiceError}</p>}
+      <div className="composer-row">
+        <textarea
+          ref={input}
+          rows={1}
+          disabled={reading}
+          value={text}
+          placeholder={placeholder}
+          aria-label={placeholder}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (
+              e.key === 'Enter' &&
+              !e.shiftKey &&
+              !e.metaKey &&
+              !e.ctrlKey &&
+              !e.nativeEvent.isComposing &&
+              (text.trim() || changing)
+            ) {
+              e.preventDefault();
+              e.stopPropagation();
+              send();
+            }
+          }}
+        />
+        {view.name !== 'no-plan' && (
+          <button
+            className="mic"
+            aria-label="Talk to Frank. Click to start, click again to send."
+            onClick={() => void c.startTalking()}
+          >
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+              <rect
+                x="5.5"
+                y="1.5"
+                width="5"
+                height="8.5"
+                rx="2.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.4"
+              />
+              <path
+                d="M3 7.5a5 5 0 0 0 10 0M8 12.5v2"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
+        )}
+      </div>
     </div>
   );
 });

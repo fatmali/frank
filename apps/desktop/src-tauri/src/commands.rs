@@ -3,6 +3,7 @@
 
 use crate::shell;
 use crate::state::{AppState, lock};
+use crate::voice::Voice;
 use frank_core::brain::{BrainError, BrainRequest, Detection};
 use frank_core::config::Config;
 use frank_core::detect::{BrainOption, detect_all};
@@ -49,6 +50,7 @@ pub fn save_config(state: State<'_, AppState>, config: Config) -> Result<Config,
         c.brain = config.brain;
         c.plans = config.plans;
         c.context = config.context;
+        c.voice = config.voice;
     })
 }
 
@@ -308,6 +310,33 @@ pub fn set_sticky(app: AppHandle, state: State<'_, AppState>, enabled: bool) -> 
     let config = state.update_config(|c| c.sticky.enabled = enabled)?;
     shell::show_sticky(&app, enabled, config.sticky.position);
     Ok(())
+}
+
+/// Holding Space in the panel. (The hotkey starts listening by itself.)
+#[tauri::command]
+pub fn voice_start(app: AppHandle, voice: State<'_, Voice>) {
+    voice.start(&app);
+}
+
+#[tauri::command]
+pub fn voice_stop(app: AppHandle, voice: State<'_, Voice>) {
+    voice.stop(&app);
+}
+
+#[tauri::command]
+pub async fn voice_download_model(app: AppHandle, voice: State<'_, Voice>) -> Result<(), ()> {
+    voice.download(&app).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn speak(app: AppHandle, voice: State<'_, Voice>, text: String) {
+    voice.speak(&app, &text);
+}
+
+#[tauri::command]
+pub fn stop_speaking(voice: State<'_, Voice>) {
+    voice.stop_speaking();
 }
 
 /// Frank's mood, shown on the menu bar icon and sticky Frank.

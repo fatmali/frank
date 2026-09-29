@@ -67,6 +67,11 @@ function blocks(text: string): ReactNode[] {
   return out;
 }
 
+/** One line of brain text with its `code` and **bold**, and nothing else. */
+export function Inline({ text }: { text: string }) {
+  return <>{inline(text)}</>;
+}
+
 /** A comparison table: 2–3 options across 3–4 dimensions (ux.md §7, Compare). */
 function Compare({ rows }: { rows: string[] }) {
   const cells = rows

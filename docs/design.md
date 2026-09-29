@@ -119,8 +119,11 @@ Other sessions follow the same shape:
 ### 3.2 Input
 
 - **FR-5 [M1]** Type into the panel.
-- **FR-6 [M3]** Push-to-talk. Holding the hotkey records, and releasing it
-  transcribes on-device and sends.
+- **FR-6 [M1]** Push-to-talk. Holding the hotkey (or `Space` in the panel)
+  records, and releasing it transcribes on-device and sends. Common commands
+  ("keep it", "option two", "next") act at once; anything else goes to
+  Frank. When spoken to, Frank speaks the first two sentences of his reply.
+  See ux.md §6.
 - **FR-7 [M1]** Drop files or text onto the panel, or onto sticky Frank, to
   add them as context. A pasted plan works the same as a found one.
 
@@ -467,10 +470,18 @@ reuses it within the session.
 
 ### 6.5 Voice
 
-Push-to-talk only: hold the hotkey to record, release to transcribe. Speech
-is transcribed on-device with whisper.cpp, or Apple's speech framework on
-macOS, then sent as a normal message. The microphone is never always on, and
-Frank doesn't speak his replies in the first versions.
+Push-to-talk only: hold the hotkey to record, release to transcribe. The
+microphone starts after a quarter-second hold, so a tap never opens it.
+
+- **Transcription** runs on-device with whisper.cpp (`base.en`, about
+  140 MB, downloaded once with the developer's consent to
+  `~/.frank/models/`). Audio is never saved and never leaves the machine.
+- **Commands** ("keep it", "option two", "next", "what would you do?") are
+  matched on-device against the current call, so they act instantly.
+  Everything else goes to the brain as text.
+- **Spoken replies** use the system voice (`say` on macOS): the first two
+  sentences of Frank's reply, only when the developer spoke (configurable).
+  Any key stops him.
 
 ### 6.6 Privacy and security
 
@@ -499,8 +510,10 @@ The detailed task list is in [m1-plan.md](m1-plan.md).
 - Sticky mode (off by default).
 - Plans: the latest Claude Code plan found automatically, or pasted or
   dropped.
-- The session: breakdown, touched-file checks, talk-through and the agent
+- The session: the read, one call at a time with options, tradeoffs and
+  what it comes down to, touched-file checks, talk-through and the agent
   note.
+- Voice: push-to-talk with on-device transcription, spoken replies.
 - Brains, with auto-detection:
   - Claude Code (headless);
   - GitHub Copilot (Copilot SDK);
@@ -523,12 +536,14 @@ three minutes, with no new API key.
 **Exit:** right after an agent writes a plan, summoning Frank opens it with
 its key calls listed, with no copy-pasting, on any supported brain.
 
-### M3 — Talk to him
+### M3 — Talk to him more
 
-Push-to-talk with on-device transcription.
+Push-to-talk arrived in M1. M3 makes the conversation richer: streaming
+transcription while you talk, choosing Frank's voice, and talking through
+problems that aren't plans ("I've been stuck on this bug for an hour").
 
-**Exit:** hold the hotkey, say "walk me through this plan," and the session
-starts on the found plan.
+**Exit:** hold the hotkey, describe a bug out loud, and Frank asks the one
+question that gets you unstuck.
 
 ### M4 — Close the loop
 

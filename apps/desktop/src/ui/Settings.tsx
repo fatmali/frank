@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { Config } from '../host.ts';
+import type { Config, TalkBack } from '../host.ts';
 import { BrainList } from './BrainList.tsx';
 import { HotkeyRecorder } from './HotkeyRecorder.tsx';
 import { Kbd } from './Kbd.tsx';
@@ -106,6 +106,27 @@ export function Settings() {
           />
           Keep Frank on screen, on top of other windows. Click him to open the panel.
         </label>
+      </section>
+
+      <section>
+        <h2>Voice</h2>
+        <label className="inline-field">
+          Frank talks back
+          <select
+            value={draft.voice?.talk_back ?? 'when-spoken'}
+            onChange={(e) =>
+              void save({ ...draft, voice: { talk_back: e.target.value as TalkBack } })
+            }
+          >
+            <option value="when-spoken">when I talk to him</option>
+            <option value="always">always</option>
+            <option value="never">never</option>
+          </select>
+        </label>
+        <p className="quiet">
+          Hold the hotkey, or Space in the panel, to talk. Speech is turned into text on
+          this Mac; audio is never saved or sent.
+        </p>
       </section>
 
       <section>

@@ -7,10 +7,13 @@ import { loadFixture } from './helpers.ts';
 const base: Call = {
   id: '1',
   title: 'Drop the sessions table',
+  question: 'Should the sessions table go now?',
+  stakes: '',
   kind: 'silent-choice',
   planQuote: '',
   planChoice: 'Drops the sessions table in a new migration',
   alternatives: ['Keep the table until every client is on JWT'],
+  options: [],
   undoCost: 'hard',
   contradicted: false,
   evidence: [],

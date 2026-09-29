@@ -4,7 +4,7 @@
  * the panel (docs/ux.md §6.5).
  */
 
-export type Mood = 'idle' | 'thinking' | 'judging' | 'done';
+export type Mood = 'idle' | 'listening' | 'thinking' | 'judging' | 'done';
 
 /** Head, bill and chest. The bottom edge is flat so the bust can sit on a line. */
 export const HEAD =
@@ -21,6 +21,8 @@ export const MOUTH =
 /** Marks above the head, one per mood. Drawn in `currentColor`. */
 export const MARKS: Record<Mood, string> = {
   idle: '',
+  listening:
+    '<rect x="24.2" y="2.6" width="2.4" height="5" rx="1.2"/><rect x="28.4" y="0.2" width="2.4" height="7.4" rx="1.2"/><rect x="32.6" y="3.4" width="2.4" height="4.2" rx="1.2"/>',
   thinking:
     '<circle cx="23.5" cy="2.6" r="1.8"/><circle cx="28.5" cy="2.6" r="1.8"/><circle cx="33.5" cy="2.6" r="1.8"/>',
   judging:

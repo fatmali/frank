@@ -47,16 +47,23 @@ for, because you don't need another one.
    dignity left.
 2. **He finds the plan.** Frank grabs the plan your agent just wrote, plus
    your repo and the files the plan touches. You don't paste anything.
-3. **He spots the calls that matter.** Five at most, hardest to undo first:
+3. **He gives you the read.** One line on what the plan does, how many
+   calls actually need you ("two, the rest is routine"), and what he checked
+   and found fine, so you can stop worrying about it. The calls, five at
+   most, hardest to undo first:
    - **options the plan offers:** "Redis or in memory?"
    - **choices it made without asking:** new dependencies, schema changes,
      "let's apply this to every route"
    - **assumptions that don't hold:** "there is no Redis in this repo,
      buddy"
-4. **He talks them through with you.** One call at a time: the options side
-   by side, one good question, and receipts from your actual code. Ask
-   *"what would you do?"* and you get a straight answer. He doesn't hedge.
-   He's a duck.
+4. **One call at a time.** Each call is a plain question ("where should
+   the counters live?"), the plan's own words, what you gain and what you
+   pay for each option, and the one fact it comes down to ("will you run
+   more than one instance?"). Answer that and Frank points at the option it
+   leads to. Ask *"what would you do?"* and you get a straight answer. He
+   doesn't hedge. He's a duck.
+   Hold the hotkey and just say it: "no, one instance", "go with in memory",
+   "next". Speech is turned into text on your Mac; audio never leaves it.
 5. **Back to work.** Frank writes a short note for your agent (keep this,
    change that, drop this), copies it, and goes back to wherever ducks go.
 
@@ -271,9 +278,10 @@ which case he's just... there. Watching. You asked for this.)
      '--'
 ```
 
-What works today: the menu bar duck, the hotkey, finding your latest Claude
-Code plan, reading the files it mentions, finding the calls, talking them
-through, and copying the note. Brains: Claude Code, GitHub Copilot, the
+What works today: the menu bar duck, the hotkey (tap to open, hold to
+talk), finding your latest Claude Code plan, reading the files it mentions,
+the read, one call at a time with its trade-offs, talking it through (typed
+or spoken), and copying the note. Brains: Claude Code, GitHub Copilot, the
 Anthropic and OpenAI APIs (or anything OpenAI-compatible), and Ollama.
 
 ### Try it (macOS, early, unsigned)

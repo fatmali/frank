@@ -28,7 +28,26 @@ export interface Config {
   sticky: { enabled: boolean; position?: [number, number] };
   plans: { window_minutes: number };
   context: { max_file_kb: number; trusted_projects: string[] };
+  voice: { talk_back: TalkBack };
 }
+
+/** When Frank speaks his replies (ux.md §6.1). */
+export type TalkBack = 'when-spoken' | 'always' | 'never';
+
+/** What the microphone side of the app reports (ux.md §6.3). */
+export type VoiceEvent =
+  | { type: 'listening' }
+  /** Input level, 0 to 1, about 20 times a second while listening. */
+  | { type: 'level'; level: number }
+  | { type: 'transcribing' }
+  | { type: 'heard'; text: string }
+  | { type: 'failed'; message: string }
+  /** Voice needs the speech model first; nothing was recorded. */
+  | { type: 'needs-model'; megabytes: number }
+  | { type: 'downloading'; fraction: number }
+  | { type: 'model-ready' }
+  /** Frank finished (or stopped) speaking. */
+  | { type: 'spoken' };
 
 export interface Gathered {
   files: FileContext[];
@@ -74,6 +93,14 @@ export interface Host {
   onShown(handler: () => void): void;
   onOpenSettings(handler: () => void): void;
   onFileDrop(handler: (paths: string[]) => void): void;
+  /** Starts listening (holding Space in the panel). The hotkey does this itself. */
+  voiceStart(): Promise<void>;
+  /** Stops listening and transcribes; the words arrive as a "heard" event. */
+  voiceStop(): Promise<void>;
+  downloadVoiceModel(): Promise<void>;
+  speak(text: string): Promise<void>;
+  stopSpeaking(): Promise<void>;
+  onVoice(handler: (event: VoiceEvent) => void): void;
 }
 
 /** The engine's view of whichever brain the host is set up with. */

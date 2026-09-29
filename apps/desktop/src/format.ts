@@ -10,25 +10,41 @@ const UNDO: Record<UndoCost, string> = {
   easy: 'easy to undo',
 };
 
-/** What the calls list shows at the right of a call. */
-export function callStatus(call: Call): string {
-  switch (call.outcome?.verdict) {
-    case 'keep':
-      return 'kept';
-    case 'change':
-      return 'changed';
-    case 'drop':
-      return 'dropped';
-    default:
-      return UNDO[call.undoCost];
-  }
+export function undoLabel(cost: UndoCost): string {
+  return UNDO[cost];
 }
 
-/** The screen-reader label for a call row (ux.md §6.7). */
-export function callLabel(call: Call, total: number): string {
-  const made = call.outcome ? callStatus(call) : 'not made yet';
-  const flagged = call.contradicted ? ', the code disagrees with the plan' : '';
-  return `Call ${call.id} of ${total}, ${call.title}, ${UNDO[call.undoCost]}${flagged}, ${made}.`;
+/** What became of a call: "In memory, changed", "kept", "dropped", "as planned". */
+export function outcomeWord(call: Call): string {
+  const o = call.outcome;
+  if (!o) return 'as planned';
+  if (o.verdict === 'keep') return 'kept';
+  if (o.verdict === 'drop') return 'dropped';
+  const chosen = o.option ? call.options[o.option - 1]?.label : undefined;
+  return chosen ? `${chosen}, changed` : 'changed';
+}
+
+/** The right-hand label of a call in the read. */
+export function readLabel(call: Call): string {
+  if (call.outcome) return outcomeWord(call);
+  return call.contradicted ? 'code disagrees' : UNDO[call.undoCost];
+}
+
+const COUNT = ['No', 'One', 'Two', 'Three', 'Four', 'Five'];
+
+/** The size of the job, said first (ux.md §2): "Two calls need you." */
+export function sizeOfIt(calls: number, reading: boolean): string {
+  if (reading) return calls ? `${COUNT[calls] ?? calls} so far.` : 'Finding the calls';
+  if (!calls) return 'Nothing here worth a second look. Ship it.';
+  const n = COUNT[calls] ?? String(calls);
+  return calls === 1
+    ? 'One call needs you. The rest is routine.'
+    : `${n} calls need you. The rest is routine.`;
+}
+
+/** The plan's words without Markdown punctuation: `x` and **x** read as x. */
+export function plainQuote(quote: string): string {
+  return quote.replace(/`([^`]*)`/g, '$1').replace(/(\*\*|__)(.+?)\1/g, '$2');
 }
 
 export function timeAgo(iso: string, now = Date.now()): string {

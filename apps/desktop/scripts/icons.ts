@@ -11,7 +11,7 @@ import { appIconSvg, silhouetteSvg, type Mood } from '../src/duck.ts';
 const out = new URL('../src-tauri/icons/', import.meta.url);
 mkdirSync(new URL('tray/', out), { recursive: true });
 
-const moods: Mood[] = ['idle', 'thinking', 'judging', 'done'];
+const moods: Mood[] = ['idle', 'listening', 'thinking', 'judging', 'done'];
 for (const mood of moods) {
   const png = new Resvg(silhouetteSvg(mood), {
     fitTo: { mode: 'width', value: 36 },

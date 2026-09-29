@@ -12,6 +12,22 @@ pub struct Config {
     pub sticky: StickyConfig,
     pub plans: PlansConfig,
     pub context: ContextConfig,
+    pub voice: VoiceConfig,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct VoiceConfig {
+    /// When Frank speaks his replies: `when-spoken` (default), `always` or `never`.
+    pub talk_back: String,
+}
+
+impl Default for VoiceConfig {
+    fn default() -> Self {
+        Self {
+            talk_back: "when-spoken".into(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
@@ -61,6 +77,7 @@ impl Default for Config {
             sticky: StickyConfig::default(),
             plans: PlansConfig::default(),
             context: ContextConfig::default(),
+            voice: VoiceConfig::default(),
         }
     }
 }

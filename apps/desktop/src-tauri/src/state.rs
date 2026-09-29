@@ -29,6 +29,8 @@ pub struct AppState {
     /// Set when the developer starts dragging sticky Frank. Moves Frank makes
     /// himself (placing him on screen) aren't saved.
     pub sticky_dragging: Mutex<bool>,
+    /// The global hotkey: tap or hold.
+    pub hotkey: Mutex<Hotkey>,
     pub keys: Arc<dyn KeyStore>,
 }
 
@@ -48,6 +50,7 @@ impl AppState {
             pinned: Mutex::new(false),
             sticky_moves: Mutex::new(0),
             sticky_dragging: Mutex::new(false),
+            hotkey: Mutex::default(),
             keys: Arc::new(Keychain),
         }
     }
@@ -93,6 +96,15 @@ impl AppState {
     pub async fn forget_brain(&self) {
         *self.brain.lock().await = None;
     }
+}
+
+#[derive(Debug, Default)]
+pub struct Hotkey {
+    pub down: bool,
+    /// Held long enough to be talking, not tapping.
+    pub holding: bool,
+    /// Counts presses, so a timer from an earlier press can tell it's stale.
+    pub presses: u64,
 }
 
 /// Locks a mutex, ignoring poisoning: every value here stays valid if a

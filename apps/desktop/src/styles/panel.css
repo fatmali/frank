@@ -292,66 +292,21 @@ select {
   color: var(--ink-muted);
 }
 
-/* ---------------------------------------------------------------- calls */
+/* ---------------------------------------------------------------- shared marks */
 
-.calls {
-  margin: 0;
-  padding: var(--space-1) 0;
-  list-style: none;
-  border-bottom: var(--hairline) solid var(--rule);
-}
-
-.call {
-  display: grid;
-  grid-template-columns: var(--margin-col) 1fr auto;
-  gap: 0 var(--space-2);
-  align-items: baseline;
-  width: 100%;
-  min-height: var(--row);
-  padding: var(--space-2) var(--space-4);
-  border: 0;
-  background: none;
-  text-align: left;
-  cursor: pointer;
-}
-
-.call[aria-current='true'] {
-  box-shadow: inset 2px 0 var(--duck);
-  background: var(--surface-sunk);
-}
-
-.call-number {
+.call-number,
+.option-number {
   font-family: var(--font-mark);
   font-size: var(--text-title);
   line-height: 1;
   color: var(--ink-muted);
 }
 
-.call[aria-current='true'] .call-number {
-  color: var(--duck-ink);
-}
-
-.call-title {
-  font-weight: var(--weight-strong);
-}
-
-.call[data-made] .call-title {
-  font-weight: var(--weight-regular);
-  color: var(--ink-muted);
-}
-
-.call[data-made='drop'] .call-title {
-  text-decoration: line-through;
-}
-
-.call-status {
+.margin-note {
+  font-family: var(--font-mark);
   font-size: var(--text-meta);
   color: var(--ink-muted);
   white-space: nowrap;
-}
-
-.margin-note {
-  font-family: var(--font-mark);
 }
 
 .margin-note.flagged {
@@ -359,47 +314,11 @@ select {
 }
 
 .plan-quote {
-  display: block;
-  grid-column: 2 / -1;
-  margin-top: 2px;
   font-family: var(--font-code);
   font-size: var(--text-code);
   line-height: var(--leading-code);
   color: var(--ink-muted);
   quotes: none;
-}
-
-/* The list is an index: one line per call. The selected call shows the plan's
-   words in full; the others fold theirs away once Frank has marked them, so
-   the conversation has room. */
-.call:not([aria-current='true']) .call-title {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.call:not([aria-current='true']) .plan-quote {
-  max-height: 0;
-  margin-top: 0;
-  opacity: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  transition:
-    max-height var(--t-note) var(--ease),
-    opacity var(--t-note) var(--ease);
-}
-
-.calls.marking .call .plan-quote {
-  max-height: calc(var(--text-code) * var(--leading-code) + 2px);
-  margin-top: 2px;
-  opacity: 1;
-}
-
-.call:not([aria-current='true']) {
-  min-height: 0;
-  padding-top: var(--space-2);
-  padding-bottom: var(--space-2);
 }
 
 /* Frank's mark: an amber underline under the plan's own words. */
@@ -408,19 +327,100 @@ select {
   background: linear-gradient(var(--duck), var(--duck)) no-repeat left bottom / 100% 1.5px;
 }
 
-.call[data-made] .plan-quote .underline {
-  background-size: 0 0;
+.kbd + * {
+  margin-left: 0;
 }
 
-/* The one orchestrated moment: Frank marks the plan (ux.md §6.6). */
-.calls.marking .call-number {
+/* ---------------------------------------------------------------- the read */
+
+.the-read,
+.call-view,
+.your-calls {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-4) var(--space-4) var(--space-3);
+}
+
+.gist {
+  font-size: var(--text-title);
+  line-height: 1.4;
+  max-width: 60ch;
+}
+
+.size {
+  margin-top: var(--space-3);
+  font-weight: var(--weight-strong);
+}
+
+.read-calls,
+.decisions {
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.read-call,
+.decision {
+  display: grid;
+  grid-template-columns: var(--margin-col) 1fr auto;
+  gap: 2px var(--space-2);
+  align-items: baseline;
+  width: 100%;
+  padding: var(--space-2) 0;
+  border: 0;
+  border-bottom: var(--hairline) solid var(--rule);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.read-calls li:last-child .read-call,
+.decisions li:last-child .decision {
+  border-bottom: 0;
+}
+
+.read-call:hover:not(:disabled),
+.decision:hover {
+  box-shadow: inset 2px 0 var(--duck);
+}
+
+.read-call:disabled {
+  cursor: default;
+}
+
+.call-question,
+.decision-title {
+  font-weight: var(--weight-strong);
+}
+
+.read-call[data-made] .call-question {
+  font-weight: var(--weight-regular);
+  color: var(--ink-muted);
+}
+
+.call-status,
+.decision-outcome {
+  font-size: var(--text-meta);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.read-call .plan-quote {
+  grid-column: 2 / -1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The one orchestrated moment: Frank marks the plan as each call arrives. */
+.read-calls.marking li:last-child .call-number {
   animation: mark-in var(--t-mark) var(--ease) both;
-  animation-delay: calc(var(--i) * var(--t-mark-stagger));
 }
 
-.calls.marking .plan-quote .underline {
-  animation: underline var(--t-mark) var(--ease) both;
-  animation-delay: calc(var(--i) * var(--t-mark-stagger) + 40ms);
+.read-calls.marking li:last-child .plan-quote .underline {
+  animation: underline var(--t-mark) var(--ease) 40ms both;
 }
 
 @keyframes mark-in {
@@ -436,13 +436,293 @@ select {
   }
 }
 
+.more {
+  margin-top: var(--space-2);
+  padding-left: calc(var(--margin-col) + var(--space-2));
+}
+
+.more::after,
+.size.working::after,
+.steps .now::after {
+  content: '…';
+  display: inline-block;
+  width: 1ch;
+  overflow: hidden;
+  vertical-align: bottom;
+  animation: ellipsis 1.2s steps(4, end) infinite;
+}
+
+@keyframes ellipsis {
+  from {
+    width: 0;
+  }
+}
+
+.fine {
+  margin-top: var(--space-4);
+  color: var(--ink-muted);
+}
+
+.fine h2,
+.note-preview h2,
+.your-calls > h2 {
+  font-size: var(--text-meta);
+  font-weight: var(--weight-strong);
+  color: var(--ink-muted);
+}
+
+.fine p {
+  margin-top: var(--space-1);
+}
+
+/* ---------------------------------------------------------------- a call */
+
+.call-view {
+  animation: call-in var(--t-mark) var(--ease);
+}
+
+@keyframes call-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* The question stays in view while the conversation scrolls under it. */
+.call-head {
+  position: sticky;
+  top: calc(-1 * var(--space-4));
+  z-index: 1;
+  margin: calc(-1 * var(--space-4)) calc(-1 * var(--space-4)) 0;
+  padding: var(--space-4) var(--space-4) var(--space-2);
+  background: var(--surface);
+}
+
+.rail {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.segments {
+  display: flex;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.segment {
+  display: block;
+  width: 20px;
+  height: 12px;
+  padding: 0;
+  border: 0;
+  background: linear-gradient(var(--rule), var(--rule)) no-repeat center / 100% 3px;
+  cursor: pointer;
+}
+
+.segment[data-made] {
+  background-image: linear-gradient(var(--ink-muted), var(--ink-muted));
+}
+
+.segment[aria-current='true'] {
+  background-image: linear-gradient(var(--duck), var(--duck));
+}
+
+.rail .meta:last-child,
+.rail .margin-note {
+  margin-left: auto;
+}
+
+.question {
+  margin-top: var(--space-3);
+  font-size: var(--text-title);
+  line-height: 1.35;
+}
+
+.plan-said {
+  margin-top: var(--space-1);
+}
+
+.stakes {
+  margin-top: var(--space-3);
+  max-width: 60ch;
+}
+
+.options {
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: var(--hairline) solid var(--rule);
+}
+
+.option {
+  display: grid;
+  grid-template-columns: var(--margin-col) 1fr auto;
+  gap: 2px var(--space-2);
+  align-items: baseline;
+  width: 100%;
+  padding: var(--space-2) var(--space-2) var(--space-2) 0;
+  border: 0;
+  border-bottom: var(--hairline) solid var(--rule);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.option:hover:not(:disabled),
+.option[data-lit] {
+  box-shadow: inset 2px 0 var(--duck);
+  background: var(--surface-sunk);
+}
+
+.option[data-lit] .option-number,
+.option[aria-pressed='true'] .option-number {
+  color: var(--duck-ink);
+}
+
+.option-number {
+  padding-left: var(--space-2);
+}
+
+.option-label {
+  font-weight: var(--weight-strong);
+}
+
+.trade {
+  grid-column: 2 / -1;
+  color: var(--ink-muted);
+}
+
+.trade .sign {
+  display: inline-block;
+  width: 1.4ch;
+  font-family: var(--font-mark);
+  color: var(--ink);
+}
+
+.hinge {
+  margin-top: var(--space-4);
+}
+
+.hinge-label {
+  font-weight: var(--weight-strong);
+}
+
+.answers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.answers .leads {
+  font-weight: var(--weight-regular);
+  font-size: var(--text-meta);
+  color: var(--ink-muted);
+}
+
+.pointer {
+  margin-top: var(--space-3);
+  color: var(--duck-ink);
+  font-weight: var(--weight-strong);
+}
+
+.pointer .quiet {
+  font-weight: var(--weight-regular);
+}
+
+.evidence-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-4);
+}
+
+.evidence {
+  border-radius: var(--radius-inset);
+  background: var(--surface-sunk);
+}
+
+.evidence summary {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-meta);
+  cursor: pointer;
+  list-style: none;
+}
+
+.evidence summary::-webkit-details-marker {
+  display: none;
+}
+
+.evidence summary::before {
+  content: '▸';
+  color: var(--ink-muted);
+}
+
+.evidence[open] summary::before {
+  content: '▾';
+}
+
+.evidence-path {
+  font-family: var(--font-code);
+  font-weight: var(--weight-strong);
+  white-space: nowrap;
+}
+
+.evidence.flagged .evidence-path {
+  color: var(--bill);
+}
+
+.evidence-note {
+  color: var(--ink-muted);
+}
+
+.evidence-code {
+  margin: 0;
+  padding: 0 0 var(--space-2);
+  font-size: var(--text-code);
+  line-height: var(--leading-code);
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.evidence-code .line {
+  display: block;
+  padding-right: var(--space-3);
+}
+
+.evidence-code .ln {
+  display: inline-block;
+  width: var(--margin-col);
+  padding-right: var(--space-2);
+  text-align: right;
+  color: var(--ink-muted);
+  opacity: 0.7;
+}
+
+.evidence-code .cited {
+  box-shadow: inset 2px 0 var(--duck);
+}
+
+.evidence.flagged .evidence-code .cited {
+  box-shadow: inset 2px 0 var(--bill);
+}
+
+.copy-path {
+  margin: 0 0 var(--space-2) var(--space-3);
+  font-size: var(--text-meta);
+}
+
 /* ---------------------------------------------------------------- conversation */
 
 .conversation {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  padding: var(--space-3) var(--space-4) 0;
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: var(--hairline) solid var(--rule);
   -webkit-user-select: text;
   user-select: text;
   cursor: auto;
@@ -521,108 +801,58 @@ select {
   color: var(--ink-muted);
 }
 
-.evidence {
-  margin: var(--space-1) 0 0;
-  border-radius: var(--radius-inset);
-  background: var(--surface-sunk);
-  overflow: hidden;
-}
-
-.evidence figcaption {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 var(--space-2);
-  align-items: baseline;
-  padding: var(--space-2) var(--space-3) var(--space-1);
-  font-size: var(--text-meta);
-}
-
-.evidence-path {
-  padding: 0;
-  border: 0;
-  background: none;
-  font-family: var(--font-code);
-  font-weight: var(--weight-strong);
-  cursor: copy;
-}
-
-.evidence.flagged .evidence-path {
-  color: var(--bill);
-}
-
-.evidence-note {
-  color: var(--ink-muted);
-}
-
-.evidence-code {
-  margin: 0;
-  padding: 0 0 var(--space-2);
-  font-size: var(--text-code);
-  line-height: var(--leading-code);
-  white-space: pre;
-  overflow-x: auto;
-}
-
-.evidence-code .line {
-  display: block;
-  padding: 0 var(--space-3) 0 0;
-}
-
-.evidence-code .ln {
-  display: inline-block;
-  width: var(--margin-col);
-  padding-right: var(--space-2);
-  text-align: right;
-  color: var(--ink-muted);
-  opacity: 0.7;
-}
-
-.evidence-code .cited {
-  box-shadow: inset 2px 0 var(--duck);
-}
-
-.evidence.flagged .evidence-code .cited {
-  box-shadow: inset 2px 0 var(--bill);
-}
-
 .actions-inline {
   display: flex;
   gap: var(--space-3);
   align-items: center;
 }
 
-/* ---------------------------------------------------------------- actions, composer */
+/* ---------------------------------------------------------------- your calls */
 
-.call-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  align-items: center;
-  padding: var(--space-2) var(--space-4) var(--space-3)
-    calc(var(--space-4) + var(--margin-col) + var(--space-2));
+.your-calls .note-preview {
+  margin-top: var(--space-4);
+  animation: note-open var(--t-note) var(--ease);
 }
 
-.call-actions .push {
-  margin-left: auto;
+.decision-outcome {
+  color: var(--ink);
 }
+
+.note-preview pre {
+  margin: var(--space-1) 0 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-inset);
+  background: var(--surface-sunk);
+  font-size: var(--text-code);
+  line-height: var(--leading-code);
+  white-space: pre-wrap;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+@keyframes note-open {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* ---------------------------------------------------------------- composer */
 
 .composer {
-  padding: 0 var(--space-4) var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-top: var(--hairline) solid var(--rule);
 }
 
-.composer-hint {
-  display: flex;
-  justify-content: space-between;
-  padding-bottom: var(--space-1);
-  font-size: var(--text-meta);
-  color: var(--duck-ink);
+.composer-row {
+  position: relative;
 }
 
 .composer textarea {
   display: block;
   width: 100%;
   max-height: 120px;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-2) 36px var(--space-2) var(--space-3);
   border: var(--hairline) solid var(--rule);
   border-radius: var(--radius-inset);
   background: var(--surface-sunk);
@@ -646,6 +876,81 @@ select {
   border-color: var(--duck);
 }
 
+.mic {
+  position: absolute;
+  top: 50%;
+  right: var(--space-2);
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-muted);
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+
+.mic:hover {
+  color: var(--ink);
+}
+
+.composer-hint {
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: var(--space-1);
+  font-size: var(--text-meta);
+  color: var(--duck-ink);
+}
+
+.composer-hint.error {
+  color: var(--ink);
+}
+
+.voice-status {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 57px;
+  color: var(--ink);
+  font-weight: var(--weight-strong);
+}
+
+.voice-status.listening {
+  cursor: pointer;
+}
+
+.meter {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 22px;
+}
+
+.meter span {
+  width: 3px;
+  min-height: 2px;
+  background: var(--duck);
+  transition: height 60ms linear;
+}
+
+.download-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--duck);
+  transition: width var(--t-note) var(--ease);
+}
+
+.voice-consent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
 /* ---------------------------------------------------------------- footer */
 
 .note-footer {
@@ -656,10 +961,14 @@ select {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: var(--space-3);
   padding: var(--space-2) var(--space-4);
 }
 
 .progress {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   font-size: var(--text-meta);
   color: var(--ink-muted);
 }
@@ -669,30 +978,21 @@ select {
   font-weight: var(--weight-strong);
 }
 
-.note-preview {
-  padding: var(--space-3) var(--space-4) 0;
-  animation: note-open var(--t-note) var(--ease);
+.hints {
+  display: flex;
+  gap: var(--space-3);
 }
 
-.note-preview h2 {
-  font-size: var(--text-meta);
+.hints > span {
+  display: inline-flex;
+  white-space: nowrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.quiet-button {
   color: var(--ink-muted);
-}
-
-.note-preview pre {
-  margin: var(--space-1) 0 0;
-  font-size: var(--text-code);
-  line-height: var(--leading-code);
-  white-space: pre-wrap;
-  -webkit-user-select: text;
-  user-select: text;
-}
-
-@keyframes note-open {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
+  font-weight: var(--weight-regular);
 }
 
 /* ---------------------------------------------------------------- states */
@@ -747,21 +1047,6 @@ select {
 .steps .now::before {
   content: '›';
   color: var(--duck-ink);
-}
-
-.steps .now::after {
-  content: '…';
-  animation: ellipsis 1.2s steps(4, end) infinite;
-  display: inline-block;
-  overflow: hidden;
-  vertical-align: bottom;
-  width: 1ch;
-}
-
-@keyframes ellipsis {
-  from {
-    width: 0;
-  }
 }
 
 .steps .next {
@@ -1009,4 +1294,10 @@ select {
     animation: none !important;
     transition: none !important;
   }
+}
+
+.the-read code,
+.call-view code,
+.fine code {
+  font-size: var(--text-code);
 }

@@ -12,81 +12,136 @@ import {
   type Config,
   type Gathered,
   type Host,
+  type VoiceEvent,
 } from './host.ts';
 import type { Mood } from './duck.ts';
 
 export const DEMO_BREAKDOWN = {
+  gist: 'Adds a per-key limit of 100 requests a minute to the public API, with counters kept in Redis.',
   calls: [
     {
-      title: 'Store counts in Redis',
+      title: 'Counter storage',
+      question: 'Where should the counters live?',
       kind: 'silent-choice',
       planQuote: 'Use Redis to share counters across instances',
-      planChoice: 'Keeps rate-limit counters in Redis, shared by all instances',
-      alternatives: ['In-memory counters in the API process'],
+      stakes: 'Redis is a new service to deploy, secure and watch from now on.',
+      options: [
+        {
+          label: 'Redis',
+          gain: 'works across instances',
+          cost: 'a new service to run',
+          instruction: 'Keep counters in Redis, shared across instances.',
+        },
+        {
+          label: 'In memory',
+          gain: 'nothing new to run',
+          cost: 'resets on deploy, one instance only',
+          instruction: 'Keep counters in memory in the API process instead of Redis.',
+        },
+      ],
+      hinge: {
+        question: 'Will you run more than one API instance soon?',
+        answers: [
+          { answer: 'Yes', option: 1 },
+          { answer: 'No', option: 2 },
+        ],
+      },
       undoCost: 'hard',
       contradicted: true,
       evidence: [
-        {
-          file: 'docker-compose.yml',
-          line: 1,
-          note: 'Services are api and postgres. No Redis.',
-        },
+        { file: 'docker-compose.yml', line: 1, note: 'api and postgres only, no Redis' },
       ],
     },
     {
-      title: 'Apply to every route',
+      title: 'Limited routes',
+      question: 'Should /health be rate limited?',
       kind: 'silent-choice',
       planQuote: 'Apply the limiter to every route',
-      planChoice: 'Limits every route, including /health',
-      alternatives: ['Limit /api/public only'],
+      stakes: 'The load balancer polls /health every 2 seconds.',
+      options: [
+        {
+          label: 'Every route',
+          gain: 'one rule everywhere',
+          cost: 'can throttle health checks',
+          instruction: 'Apply the limiter to every route.',
+        },
+        {
+          label: 'Public API only',
+          gain: 'health checks untouched',
+          cost: 'internal routes unlimited',
+          instruction: 'Apply the limiter to /api/public only; leave /health alone.',
+        },
+      ],
+      hinge: {
+        question: 'Do internal callers need a limit too?',
+        answers: [
+          { answer: 'Yes', option: 1 },
+          { answer: 'No, trusted', option: 2 },
+        ],
+      },
       undoCost: 'medium',
       contradicted: false,
       evidence: [
         {
           file: 'src/server.ts',
           line: 8,
-          note: 'The load balancer polls /health every 2 seconds.',
+          note: 'the load balancer polls /health every 2 s',
         },
       ],
     },
     {
-      title: 'Add express-rate-limit',
+      title: 'New dependencies',
+      question: 'Are two new packages worth it?',
       kind: 'silent-choice',
       planQuote: 'Add `express-rate-limit` and `rate-limit-redis` as dependencies',
-      planChoice: 'Adds two dependencies',
-      alternatives: ['Only express-rate-limit, with its memory store'],
+      stakes: 'Every dependency is code you keep updating.',
+      options: [
+        {
+          label: 'Both packages',
+          gain: 'standard, well tested',
+          cost: 'two dependencies',
+          instruction: 'Add express-rate-limit and rate-limit-redis.',
+        },
+        {
+          label: 'express-rate-limit only',
+          gain: 'one dependency',
+          cost: 'memory store only',
+          instruction: 'Add express-rate-limit only, with its memory store.',
+        },
+      ],
       undoCost: 'easy',
       contradicted: false,
       evidence: [],
     },
   ],
+  fine: ['429 with a Retry-After header', 'Tests in test/rateLimit.test.ts'],
 };
 
-const OPENINGS: Record<string, string> = {
-  'Store counts in Redis':
-    "The plan adds Redis to share counters across instances. There's no Redis in docker-compose.yml, and it runs one `api` service. Are you running more than one instance in production?",
-  'Apply to every route':
-    'The plan limits every route, and that includes `/health`. The load balancer polls it every 2 seconds, so a tight limit could mark the API as down. Limit `/api/public` only?',
-  'Add express-rate-limit':
-    'The plan adds `express-rate-limit` and `rate-limit-redis`. The first is the standard choice and fine. The second only matters if you keep Redis.',
+const TAKES: Record<string, string> = {
+  'Where should the counters live?':
+    'In memory. You run one instance, and Redis is a new service to deploy and watch.\n\n' +
+    '| | In memory | Redis |\n| --- | --- | --- |\n| New infra | none | a Redis service |\n| Survives restarts | no | yes |\n| Works with 2+ instances | no | yes |\n\n' +
+    'If you scale past one instance, switch to Redis then.\n[option 2]',
+  'Should /health be rate limited?':
+    'Public API only. Limiting /health can make the load balancer think the API is down.\n[option 2]',
 };
-
-const RECOMMENDATION =
-  'Use in-memory counters. You run one instance, and Redis is a new service to deploy and watch.\n\n' +
-  '| | In memory | Redis |\n| --- | --- | --- |\n| New infra | none | a Redis service |\n| Survives restarts | no | yes |\n| Works with 2+ instances | no | yes |\n\n' +
-  'If you scale out past one instance, switch to Redis then.';
 
 /** What the scripted brain says to a request. */
 export function demoReply(request: BrainRequest): string {
   const last = request.messages[request.messages.length - 1]?.content ?? '';
-  if (request.system.includes('Find the calls')) return JSON.stringify(DEMO_BREAKDOWN);
+  if (request.system.includes('Give the developer your read'))
+    return JSON.stringify(DEMO_BREAKDOWN);
   if (/^Say ready/m.test(last)) return 'Ready.';
-  if (/What would you do/.test(last)) return RECOMMENDATION;
-  const open = /Open call \d+: "([^"]+)"/.exec(last);
-  if (open) return OPENINGS[open[1]!] ?? "The plan's choice here is fine.";
-  if (/one instance|single instance|just one/i.test(last))
-    return 'Then Redis buys you nothing yet. Change it to in-memory counters?';
-  return 'Fair. That settles it for me. Keep, change or drop?';
+  const take = /What would you do about "([^"]+)"/.exec(last);
+  if (take)
+    return (
+      TAKES[take[1]!] ?? "The plan's choice. Nothing here argues against it.\n[option 1]"
+    );
+  if (/scale|later|grow/i.test(last))
+    return "Then build for today. Swapping the store later is a small change; running Redis you don't need isn't.\n[option 2]";
+  if (/why/i.test(last))
+    return 'Because every instance counts on its own without a shared store. With one instance, that is exactly right.';
+  return 'Fair. That settles it for me. Pick the option that fits.';
 }
 
 export interface DemoOptions {
@@ -96,6 +151,10 @@ export interface DemoOptions {
   failure?: BrainFailure;
   firstRun?: boolean;
   plans?: Plan[];
+  /** Whether the speech model is already downloaded. */
+  voiceModel?: boolean;
+  /** What the pretend microphone hears, in turn. */
+  utterances?: string[];
 }
 
 export function demoHost(
@@ -110,7 +169,15 @@ export function demoHost(
     sticky: { enabled: false },
     plans: { window_minutes: 30 },
     context: { max_file_kb: 200, trusted_projects: [] },
+    voice: { talk_back: 'when-spoken' },
   };
+  const voiceHandlers: ((e: VoiceEvent) => void)[] = [];
+  const voice = (e: VoiceEvent) => voiceHandlers.forEach((h) => h(e));
+  let hasModel = opts.voiceModel ?? true;
+  const utterances = [
+    ...(opts.utterances ?? ['Just one instance, honestly.', 'no', 'go with in memory']),
+  ];
+  let levels: ReturnType<typeof setInterval> | undefined;
   const plans = opts.plans ?? [
     { ...samplePlan(), origin: '~/.claude/plans/jaunty-petting-nebula.md' },
   ];
@@ -241,6 +308,43 @@ export function demoHost(
       settings.push(handler);
     },
     onFileDrop() {},
+    async voiceStart() {
+      if (!hasModel) {
+        voice({ type: 'needs-model', megabytes: 142 });
+        return;
+      }
+      log('voiceStart');
+      voice({ type: 'listening' });
+      let t = 0;
+      levels = setInterval(
+        () => voice({ type: 'level', level: 0.35 + 0.3 * Math.sin((t += 0.9)) }),
+        60,
+      );
+    },
+    async voiceStop() {
+      clearInterval(levels);
+      log('voiceStop');
+      voice({ type: 'transcribing' });
+      if (delay) await sleep(delay * 12);
+      voice({ type: 'heard', text: utterances.shift() ?? '' });
+    },
+    async downloadVoiceModel() {
+      for (const fraction of [0.2, 0.55, 0.9, 1]) {
+        if (delay) await sleep(delay * 8);
+        voice({ type: 'downloading', fraction });
+      }
+      hasModel = true;
+      voice({ type: 'model-ready' });
+    },
+    async speak(text) {
+      log(`speak ${text}`);
+      if (delay) await sleep(delay * 60);
+      voice({ type: 'spoken' });
+    },
+    async stopSpeaking() {},
+    onVoice(handler) {
+      voiceHandlers.push(handler);
+    },
   };
   return host;
 }

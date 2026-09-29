@@ -7,6 +7,7 @@
 mod commands;
 mod shell;
 mod state;
+mod voice;
 
 fn main() {
     tauri::Builder::default()
@@ -18,6 +19,7 @@ fn main() {
                 .build(),
         )
         .manage(state::AppState::load())
+        .manage(voice::Voice::default())
         .invoke_handler(tauri::generate_handler![
             commands::get_config,
             commands::save_config,
@@ -38,6 +40,11 @@ fn main() {
             commands::set_hotkey,
             commands::set_sticky,
             commands::set_mood,
+            commands::voice_start,
+            commands::voice_stop,
+            commands::voice_download_model,
+            commands::speak,
+            commands::stop_speaking,
         ])
         .setup(shell::setup)
         .on_window_event(shell::on_window_event)

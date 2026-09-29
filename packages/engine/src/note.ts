@@ -29,6 +29,7 @@ export function composeNote(calls: Call[]): string {
     const o = c.outcome!;
     if (o.verdict === 'keep') return `- Keep: ${sentence(c.planChoice)}`;
     if (o.verdict === 'drop') return `- Drop: ${sentence(c.title)}`;
+    if (o.option) return `- ${c.title}: ${sentence(o.detail)}`;
     return `- ${sentence(c.title)} Instead: ${sentence(o.detail)}`;
   });
 

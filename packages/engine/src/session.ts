@@ -12,6 +12,10 @@ export class Session {
   readonly calls: Call[];
   readonly turns: Turn[] = [];
   selected: string | undefined;
+  /** The developer's answer to each call's hinge (0-based answer index). */
+  readonly answers: Record<string, number> = {};
+  /** The option Frank pointed at in his last reply on a call, if any. */
+  suggestion: { callId: string; option: number } | undefined;
 
   constructor(
     private readonly brain: Brain,
@@ -49,10 +53,45 @@ export class Session {
   /** "What would you do?" for the selected call. */
   whatWouldYouDo(signal?: AbortSignal): AsyncIterable<string> {
     const call = this.selected ? this.call(this.selected) : undefined;
+    const answered = call ? this.answers[call.id] : undefined;
+    const known =
+      call?.hinge && answered !== undefined
+        ? ` I said "${call.hinge.answers[answered]?.answer}" to "${call.hinge.question}".`
+        : '';
     const text = call
-      ? `What would you do about "${call.title}"? Give me a clear recommendation, the reason, and what would change your answer.`
+      ? `What would you do about "${call.question}"?${known} In at most three short sentences: name the option first, then the reason, then what would change your answer.`
       : 'What would you do? Give me a clear recommendation, the reason, and what would change your answer.';
     return this.turn(text, this.selected, signal, { shown: 'What would you do?' });
+  }
+
+  /**
+   * Chooses one of a call's options (1-based). Option 1 is the plan's own
+   * choice, so it keeps the call; any other option changes it. Returns the
+   * next call still to make, if any.
+   */
+  choose(id: string, option: number): string | undefined {
+    const call = this.call(id);
+    const chosen = call.options[option - 1];
+    if (!chosen) throw new Error(`Call ${id} has no option ${option}.`);
+    if (this.suggestion?.callId === id) this.suggestion = undefined;
+    return option === 1
+      ? this.decide(id, { verdict: 'keep' })
+      : this.decide(id, { verdict: 'change', detail: chosen.instruction, option });
+  }
+
+  /** Answers a call's hinge (0-based answer index). Returns the option it leads to. */
+  answer(id: string, answerIndex: number): number {
+    const call = this.call(id);
+    const answer = call.hinge?.answers[answerIndex];
+    if (!answer) throw new Error(`Call ${id} has no answer ${answerIndex + 1}.`);
+    this.answers[id] = answerIndex;
+    return answer.option;
+  }
+
+  /** The call after (or before) `id` in the list, whether made or not. */
+  neighbour(id: string, step: 1 | -1): string | undefined {
+    const i = this.calls.findIndex((c) => c.id === id);
+    return this.calls[i + step]?.id;
   }
 
   /** Records a call. Returns the next call still to make, if any. */
@@ -62,7 +101,11 @@ export class Session {
       throw new Error('A change needs a detail: say what to do instead.');
     }
     call.outcome = outcome;
-    const next = this.calls.find((c) => !c.outcome);
+    // Prefer the next open call after this one, then any open call before it.
+    const i = this.calls.indexOf(call);
+    const next =
+      this.calls.slice(i + 1).find((c) => !c.outcome) ??
+      this.calls.find((c) => !c.outcome);
     this.selected = next?.id ?? id;
     return next?.id;
   }
@@ -116,8 +159,12 @@ export class Session {
         yield chunk;
       }
     } finally {
-      if (reply.trim())
-        this.turns.push(withCall({ role: 'frank', text: reply.trim() }, callId));
+      const { text: said, option } = splitSuggestion(reply);
+      if (said) this.turns.push(withCall({ role: 'frank', text: said }, callId));
+      const call = callId ? this.calls.find((c) => c.id === callId) : undefined;
+      if (call && option && option <= call.options.length) {
+        this.suggestion = { callId: call.id, option };
+      }
     }
   }
 
@@ -130,4 +177,18 @@ export class Session {
 
 function withCall(turn: Turn, callId: string | undefined): Turn {
   return callId ? { ...turn, callId } : turn;
+}
+
+/**
+ * Frank ends a reply with "[option N]" when he recommends an option. Returns
+ * the reply without that line, and the option. Safe on partial replies.
+ */
+export function splitSuggestion(reply: string): { text: string; option?: number } {
+  const m = /\s*\[option\s+(\d)\]\s*$/i.exec(reply);
+  const text = (
+    m
+      ? reply.slice(0, m.index)
+      : reply.replace(/\s*\[(?:o(?:p(?:t(?:i(?:o(?:n[^\]]*)?)?)?)?)?)?$/i, '')
+  ).trim();
+  return m ? { text, option: Number(m[1]) } : { text };
 }

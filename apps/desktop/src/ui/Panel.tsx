@@ -4,7 +4,9 @@ import { Composer, type ComposerHandle } from './Composer.tsx';
 import { NoteFooter } from './Footer.tsx';
 import { Onboarding } from './Onboarding.tsx';
 import { PlanHeader, PlanPicker } from './PlanHeader.tsx';
-import { CallActions, CallsList, Conversation } from './Session.tsx';
+import { CallView } from './CallView.tsx';
+import { TheRead } from './TheRead.tsx';
+import { YourCalls } from './YourCalls.tsx';
 import { Settings } from './Settings.tsx';
 import { BrainError, ContextCheck, NoPlan, Nothing, Preparing } from './States.tsx';
 import { ControllerContext, usePanel } from './store.ts';
@@ -21,7 +23,7 @@ function PanelFrame({ controller: c }: { controller: PanelController }) {
   const state = usePanel();
   const frame = useRef<HTMLDivElement>(null);
   const composer = useRef<ComposerHandle>(null);
-  const { view, settingsOpen, pickerOpen, calls } = state;
+  const { view, settingsOpen, pickerOpen } = state;
 
   // Opening: start (or resume), and focus the composer.
   useEffect(() => {
@@ -63,9 +65,12 @@ function PanelFrame({ controller: c }: { controller: PanelController }) {
     return () => document.removeEventListener('paste', onPaste);
   }, [c]);
 
-  // The keyboard map (ux.md §4.3). Letter keys only act when the composer is
-  // empty, so typing is never hijacked.
+  // The keyboard map (ux.md §5.3). Letter and number keys act only when the
+  // composer is empty, so typing is never hijacked.
   useEffect(() => {
+    let holdTimer: ReturnType<typeof setTimeout> | undefined;
+    let talking = false;
+
     const onKey = (e: KeyboardEvent) => {
       const s = c.getSnapshot();
       const mod = e.metaKey || e.ctrlKey;
@@ -74,6 +79,12 @@ function PanelFrame({ controller: c }: { controller: PanelController }) {
       const inField = !inComposer && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName);
       const composerEmpty = composer.current?.isEmpty() ?? true;
 
+      // Any key stops Frank talking, and does nothing else.
+      if (s.voice.state === 'speaking' && !e.repeat && e.key !== ' ') {
+        e.preventDefault();
+        c.stopSpeaking();
+        return;
+      }
       if (e.key === 'Escape') {
         e.preventDefault();
         void c.close();
@@ -81,7 +92,7 @@ function PanelFrame({ controller: c }: { controller: PanelController }) {
       }
       if (mod && e.key === 'Enter') {
         e.preventDefault();
-        if (s.view.name === 'session') void c.copyNote();
+        void c.copyNote();
         return;
       }
       if (mod && e.key.toLowerCase() === 'p') {
@@ -96,9 +107,29 @@ function PanelFrame({ controller: c }: { controller: PanelController }) {
       }
       if (inField || s.settingsOpen || mod || e.altKey) return;
       if (inComposer && !composerEmpty) return;
+      if (s.changing) return;
+
+      // Hold Space to talk: the microphone starts after a quarter second.
+      if (
+        e.key === ' ' &&
+        (s.view.name === 'read' || s.view.name === 'call' || s.view.name === 'calls')
+      ) {
+        e.preventDefault();
+        if (!e.repeat && !holdTimer && !talking) {
+          holdTimer = setTimeout(() => {
+            holdTimer = undefined;
+            talking = true;
+            void c.startTalking();
+          }, 250);
+        }
+        return;
+      }
 
       if (e.key === 'Enter') {
-        if (s.newerPlan) {
+        if (s.voice.state === 'needs-model') {
+          e.preventDefault();
+          void c.downloadVoiceModel();
+        } else if (s.newerPlan) {
           e.preventDefault();
           void c.switchToNewer();
         } else if (s.view.name === 'context-check') {
@@ -107,27 +138,75 @@ function PanelFrame({ controller: c }: { controller: PanelController }) {
         } else if (s.view.name === 'error') {
           e.preventDefault();
           void c.retry();
+        } else if (s.view.name === 'read') {
+          e.preventDefault();
+          c.beginCalls();
+        } else if (s.view.name === 'call') {
+          e.preventDefault();
+          c.accept();
+        } else if (s.view.name === 'calls') {
+          e.preventDefault();
+          void c.copyNote();
         }
         return;
       }
-      if (s.view.name !== 'session' || s.changing) return;
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        c.next();
+        return;
+      }
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        c.back();
+        return;
+      }
+
       const key = e.key.toLowerCase();
-      if (/^[1-5]$/.test(key) && Number(key) <= s.calls.length) {
+      if (s.view.name === 'read' && /^[1-5]$/.test(key) && !s.reading) {
+        const call = s.calls[Number(key) - 1];
+        if (call) {
+          e.preventDefault();
+          c.show(call.id);
+        }
+        return;
+      }
+      if (s.view.name !== 'call') return;
+      if (/^[1-3]$/.test(key)) {
         e.preventDefault();
-        void c.select(key);
-      } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        c.choose(Number(key));
+      } else if (key === 'a' || key === 'b' || key === 'c') {
         e.preventDefault();
-        void c.move(e.key === 'ArrowDown' ? 1 : -1);
-      } else if (key === 'k' || key === 'c' || key === 'd') {
+        c.answer(key.charCodeAt(0) - 97);
+      } else if (key === 'd') {
         e.preventDefault();
-        void c.act(key === 'k' ? 'keep' : key === 'c' ? 'change' : 'drop');
+        c.drop();
+      } else if (key === 's') {
+        e.preventDefault();
+        c.somethingElse();
       } else if (e.key === '?') {
         e.preventDefault();
         void c.whatWouldYouDo();
       }
     };
+
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key !== ' ') return;
+      if (holdTimer) {
+        clearTimeout(holdTimer);
+        holdTimer = undefined;
+      }
+      if (talking) {
+        talking = false;
+        void c.stopTalking();
+      }
+    };
+
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    document.addEventListener('keyup', onKeyUp);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('keyup', onKeyUp);
+    };
   }, [c]);
 
   const body = (() => {
@@ -145,21 +224,18 @@ function PanelFrame({ controller: c }: { controller: PanelController }) {
         return <ContextCheck />;
       case 'error':
         return <BrainError message={view.message} />;
-      case 'session':
-        return calls.length ? (
-          <>
-            <CallsList />
-            <Conversation />
-            <CallActions />
-          </>
-        ) : (
-          <Nothing />
-        );
+      case 'read':
+        return <TheRead />;
+      case 'call':
+        return <CallView />;
+      case 'calls':
+        return <YourCalls />;
     }
   })();
 
   const chrome = !settingsOpen && view.name !== 'onboarding' && view.name !== 'starting';
-  const showComposer = chrome && (view.name === 'session' || view.name === 'no-plan');
+  const inSession = view.name === 'read' || view.name === 'call' || view.name === 'calls';
+  const showComposer = chrome && (inSession || view.name === 'no-plan');
 
   return (
     <div
@@ -172,7 +248,7 @@ function PanelFrame({ controller: c }: { controller: PanelController }) {
       {chrome && pickerOpen && <PlanPicker />}
       <main className="panel-body">{body}</main>
       {showComposer && <Composer ref={composer} />}
-      {chrome && (view.name === 'session' || state.notice) && <NoteFooter />}
+      {chrome && (inSession || state.notice) && <NoteFooter />}
     </div>
   );
 }

@@ -11,6 +11,9 @@ import type {
   CallKind,
   Context,
   Evidence,
+  Hinge,
+  Option,
+  Read,
   UndoCost,
 } from './types.ts';
 
@@ -21,9 +24,16 @@ const UNDO: readonly UndoCost[] = ['hard', 'medium', 'easy'];
 const UNDO_RANK: Record<UndoCost, number> = { hard: 0, medium: 1, easy: 2 };
 
 export type BreakdownResult =
-  | { status: 'calls'; calls: Call[]; via: 'json' | 'repaired' | 'fallback' }
-  | { status: 'nothing'; via: 'json' | 'repaired' | 'fallback' }
+  | ({ status: 'calls'; via: 'json' | 'repaired' | 'fallback' } & Read)
+  | ({ status: 'nothing'; via: 'json' | 'repaired' | 'fallback' } & Omit<Read, 'calls'>)
   | { status: 'failed'; error: string };
+
+/** What has arrived so far while the read streams in. */
+export interface PartialRead {
+  gist: string;
+  /** Complete, grounded calls, numbered in the order they arrived. */
+  calls: Call[];
+}
 
 export function buildBreakdownRequest(ctx: Context): BrainRequest {
   return {
@@ -42,17 +52,29 @@ export async function runBreakdown(
   brain: Brain,
   ctx: Context,
   signal?: AbortSignal,
+  onProgress?: (partial: PartialRead) => void,
 ): Promise<BreakdownResult> {
   const request = buildBreakdownRequest(ctx);
-  let raw: string;
+  let raw = '';
+  // Nothing to show until the gist or a call has arrived.
+  let shown = '\u00000';
   try {
-    raw = await collect(brain.stream(request, signal));
+    for await (const chunk of brain.stream(request, signal)) {
+      raw += chunk;
+      if (!onProgress) continue;
+      const partial = parsePartialRead(raw, ctx);
+      const key = `${partial.gist}\u0000${partial.calls.length}`;
+      if (key !== shown) {
+        shown = key;
+        onProgress(partial);
+      }
+    }
   } catch (err) {
     return { status: 'failed', error: errorMessage(err) };
   }
 
   const first = parseBreakdown(raw, ctx);
-  if (first.ok) return toResult(first.calls, 'json');
+  if (first.ok) return toResult(first.read, 'json');
 
   let repaired = '';
   try {
@@ -78,29 +100,33 @@ export async function runBreakdown(
   }
 
   const second = parseBreakdown(repaired, ctx);
-  if (second.ok) return toResult(second.calls, 'repaired');
+  if (second.ok) return toResult(second.read, 'repaired');
 
   const fallback = parseNumberedList(repaired || raw, ctx);
-  if (fallback.length) return toResult(fallback, 'fallback');
-  if (looksEmpty(repaired || raw)) return { status: 'nothing', via: 'fallback' };
+  if (fallback.length)
+    return toResult({ gist: '', calls: fallback, fine: [] }, 'fallback');
+  if (looksEmpty(repaired || raw))
+    return { status: 'nothing', via: 'fallback', gist: '', fine: [] };
   return {
     status: 'failed',
     error: `The brain's answer couldn't be read: ${first.errors[0] ?? 'unknown format'}`,
   };
 }
 
-function toResult(calls: Call[], via: 'json' | 'repaired' | 'fallback'): BreakdownResult {
-  return calls.length ? { status: 'calls', calls, via } : { status: 'nothing', via };
+function toResult(read: Read, via: 'json' | 'repaired' | 'fallback'): BreakdownResult {
+  return read.calls.length
+    ? { status: 'calls', via, ...read }
+    : { status: 'nothing', via, gist: read.gist, fine: read.fine };
 }
 
-export type ParseResult = { ok: true; calls: Call[] } | { ok: false; errors: string[] };
+export type ParseResult = { ok: true; read: Read } | { ok: false; errors: string[] };
 
 /** Parses, validates, grounds and ranks a JSON breakdown. */
 export function parseBreakdown(text: string, ctx: Context): ParseResult {
   const json = extractJson(text);
   if (json === undefined) return { ok: false, errors: ['no JSON object found'] };
 
-  const root = json as { calls?: unknown };
+  const root = json as { calls?: unknown; gist?: unknown; fine?: unknown };
   if (typeof root !== 'object' || root === null || !Array.isArray(root.calls)) {
     return { ok: false, errors: ['expected an object with a "calls" array'] };
   }
@@ -112,7 +138,68 @@ export function parseBreakdown(text: string, ctx: Context): ParseResult {
     if (call) calls.push(ground(call, ctx));
   });
   if (errors.length) return { ok: false, errors };
-  return { ok: true, calls: rank(calls) };
+  return {
+    ok: true,
+    read: { gist: str(root.gist), calls: rank(calls), fine: strings(root.fine, 4) },
+  };
+}
+
+/**
+ * Reads what has streamed in so far: the gist once its string is complete,
+ * and each call once its object is complete. Never throws.
+ */
+export function parsePartialRead(text: string, ctx: Context): PartialRead {
+  const gistMatch = /"gist"\s*:\s*("(?:[^"\\]|\\.)*")/.exec(text);
+  let gist = '';
+  if (gistMatch) {
+    try {
+      gist = str(JSON.parse(gistMatch[1]!));
+    } catch {
+      gist = '';
+    }
+  }
+  const calls: Call[] = [];
+  const open = /"calls"\s*:\s*\[/.exec(text);
+  if (open) {
+    for (const raw of completeObjects(text, open.index + open[0].length)) {
+      let item: unknown;
+      try {
+        item = JSON.parse(raw);
+      } catch {
+        continue;
+      }
+      const call = validateCall(item, calls.length, []);
+      if (call && calls.length < MAX_CALLS) {
+        calls.push({ ...ground(call, ctx), id: String(calls.length + 1) });
+      }
+    }
+  }
+  return { gist, calls };
+}
+
+/** The complete top-level JSON objects in an array that starts at `from`. */
+function completeObjects(text: string, from: number): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  for (let i = from; i < text.length; i++) {
+    const ch = text[i]!;
+    if (inString) {
+      if (ch === '\\') i++;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === '{') {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0 && start >= 0) out.push(text.slice(start, i + 1));
+    } else if (ch === ']' && depth === 0) break;
+  }
+  return out;
 }
 
 function validateCall(item: unknown, i: number, errors: string[]): Call | undefined {
@@ -147,19 +234,78 @@ function validateCall(item: unknown, i: number, errors: string[]): Call | undefi
       })
     : [];
 
-  return {
+  // Older replies name the plan's choice and alternatives as plain strings.
+  const planChoice = str(c.planChoice);
+  const legacyAlternatives = strings(c.alternatives, 2);
+  let options = parseOptions(c.options);
+  if (!options.length && (planChoice || legacyAlternatives.length)) {
+    options = [planChoice || title, ...legacyAlternatives].map((label) => ({
+      label,
+      gain: '',
+      cost: '',
+      instruction: label,
+    }));
+  }
+  const hinge = parseHinge(c.hinge, options.length);
+
+  const call: Call = {
     id: '',
     title,
+    question: str(c.question) || title,
+    stakes: str(c.stakes),
     kind,
     planQuote: str(c.planQuote),
-    planChoice: str(c.planChoice) || title,
-    alternatives: Array.isArray(c.alternatives)
-      ? c.alternatives.map(str).filter(Boolean).slice(0, 2)
-      : [],
+    planChoice: options[0]?.instruction || planChoice || title,
+    alternatives: options.length
+      ? options.slice(1).map((o) => o.label)
+      : legacyAlternatives,
+    options,
     undoCost,
     contradicted: c.contradicted === true,
     evidence,
   };
+  if (hinge) call.hinge = hinge;
+  return call;
+}
+
+function parseOptions(v: unknown): Option[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .flatMap((o): Option[] => {
+      if (typeof o !== 'object' || o === null) return [];
+      const r = o as Record<string, unknown>;
+      const label = str(r.label);
+      if (!label) return [];
+      return [
+        {
+          label,
+          gain: str(r.gain),
+          cost: str(r.cost),
+          instruction: str(r.instruction) || label,
+        },
+      ];
+    })
+    .slice(0, 3);
+}
+
+function parseHinge(v: unknown, optionCount: number): Hinge | undefined {
+  if (typeof v !== 'object' || v === null || optionCount < 2) return undefined;
+  const r = v as Record<string, unknown>;
+  const question = str(r.question);
+  const answers = Array.isArray(r.answers)
+    ? r.answers
+        .flatMap((a): Hinge['answers'] => {
+          if (typeof a !== 'object' || a === null) return [];
+          const x = a as Record<string, unknown>;
+          const answer = str(x.answer);
+          const option = typeof x.option === 'number' ? Math.round(x.option) : NaN;
+          return answer && option >= 1 && option <= optionCount
+            ? [{ answer, option }]
+            : [];
+        })
+        .slice(0, 3)
+    : [];
+  return question && answers.length >= 2 ? { question, answers } : undefined;
 }
 
 /**
@@ -256,10 +402,13 @@ export function parseNumberedList(text: string, ctx: Context): Call[] {
       {
         id: '',
         title,
+        question: title,
+        stakes: '',
         kind: 'silent-choice',
         planQuote: title,
         planChoice: title,
         alternatives: [],
+        options: [],
         undoCost: 'medium',
         contradicted: false,
         evidence: [],
@@ -302,6 +451,10 @@ export async function collect(chunks: AsyncIterable<string>): Promise<string> {
 
 function str(v: unknown): string {
   return typeof v === 'string' ? v.trim() : '';
+}
+
+function strings(v: unknown, max: number): string[] {
+  return Array.isArray(v) ? v.map(str).filter(Boolean).slice(0, max) : [];
 }
 
 function normalizePath(p: string): string {

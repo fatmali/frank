@@ -2,32 +2,59 @@ import { MOD } from '../format.ts';
 import { Kbd } from './Kbd.tsx';
 import { useController, usePanel } from './store.ts';
 
-/** Progress in words, the note preview, and the one primary action. */
+/**
+ * The line at the bottom: what just happened, or the keys that matter here,
+ * and the one primary action, Copy note.
+ */
 export function NoteFooter() {
   const c = useController();
-  const { progress, note, notice, noteCopied, view } = usePanel();
-  const inSession = view.name === 'session';
-  const nothing = inSession && progress.total === 0;
-  const allMade = progress.total > 0 && progress.made === progress.total;
+  const { view, calls, progress, notice, flash, noteCopied, voice, reading, highlight } =
+    usePanel();
+  const nothing = view.name === 'read' && !reading && calls.length === 0;
+  const current = c.current;
 
-  const status =
-    notice ??
-    (!inSession
-      ? ''
-      : nothing
-        ? 'Nothing to change.'
-        : allMade
-          ? `All ${progress.total} calls made`
-          : `${progress.made} of ${progress.total} calls made`);
+  let status: React.ReactNode = null;
+  if (notice) status = notice;
+  else if (voice.state === 'speaking')
+    status = (
+      <button className="text-button quiet-button" onClick={() => c.stopSpeaking()}>
+        Frank is talking. Any key stops him.
+      </button>
+    );
+  else if (flash) status = flash;
+  else if (view.name === 'read' && calls.length && !reading)
+    status = (
+      <>
+        <Kbd>↵</Kbd> Start with 1
+      </>
+    );
+  else if (view.name === 'call' && current)
+    status = (
+      <span className="hints">
+        {current.options.length > 1 && (
+          <span>
+            <Kbd>{`1–${current.options.length}`}</Kbd> choose
+          </span>
+        )}
+        {highlight && !current.outcome ? (
+          <span>
+            <Kbd>↵</Kbd> take {highlight.option}
+          </span>
+        ) : (
+          <span>
+            <Kbd>?</Kbd> Frank's take
+          </span>
+        )}
+        <span>
+          <Kbd>→</Kbd> later
+        </span>
+      </span>
+    );
+  else if (view.name === 'calls')
+    status = `${progress.made} of ${progress.total} decided. The rest stay as planned.`;
 
   return (
     <footer className="note-footer">
-      {inSession && allMade && !noteCopied && (
-        <section className="note-preview" aria-label="Note for your agent">
-          <h2>Note for your agent</h2>
-          <pre>{note}</pre>
-        </section>
-      )}
       <div className="footer-bar">
         <span className={noteCopied ? 'progress copied' : 'progress'} role="status">
           {status}
@@ -38,8 +65,8 @@ export function NoteFooter() {
           </button>
         ) : (
           <button
-            className="button primary"
-            disabled={!inSession}
+            className={view.name === 'calls' ? 'button primary' : 'button'}
+            disabled={reading}
             onClick={() => void c.copyNote()}
           >
             Copy note <Kbd>{`${MOD}↵`}</Kbd>

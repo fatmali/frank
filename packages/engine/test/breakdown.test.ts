@@ -4,10 +4,17 @@ import {
   extractJson,
   locateQuote,
   parseBreakdown,
+  parsePartialRead,
   runBreakdown,
+  type PartialRead,
 } from '../src/breakdown.ts';
 import { BREAKDOWN_SCHEMA } from '../src/prompt.ts';
-import { RATE_LIMIT_BREAKDOWN, ScriptedBrain, loadFixture } from './helpers.ts';
+import {
+  LEGACY_BREAKDOWN,
+  RATE_LIMIT_BREAKDOWN,
+  ScriptedBrain,
+  loadFixture,
+} from './helpers.ts';
 
 const ctx = loadFixture('rate-limit');
 
@@ -16,22 +23,68 @@ describe('parseBreakdown', () => {
     const r = parseBreakdown(RATE_LIMIT_BREAKDOWN, ctx);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.calls.map((c) => [c.id, c.title, c.undoCost])).toEqual([
-      ['1', 'Store counts in Redis', 'hard'],
-      ['2', 'Apply to every route', 'medium'],
-      ['3', 'Add express-rate-limit', 'easy'],
+    expect(r.read.calls.map((c) => [c.id, c.title, c.undoCost])).toEqual([
+      ['1', 'Counter storage', 'hard'],
+      ['2', 'Limited routes', 'medium'],
+      ['3', 'New dependencies', 'easy'],
     ]);
+  });
+
+  it('reads the gist, what is fine, and each call as a question with options', () => {
+    const r = parseBreakdown(RATE_LIMIT_BREAKDOWN, ctx);
+    if (!r.ok) throw new Error('parse failed');
+    expect(r.read.gist).toMatch(/^Adds a per-key limit/);
+    expect(r.read.fine).toEqual([
+      '429 with a Retry-After header',
+      'Tests in test/rateLimit.test.ts',
+    ]);
+    const redis = r.read.calls[0]!;
+    expect(redis.question).toBe('Where should the counters live?');
+    expect(redis.stakes).toMatch(/new service/);
+    expect(redis.options.map((o) => o.label)).toEqual(['Redis', 'In memory']);
+    expect(redis.options[1]).toMatchObject({
+      gain: 'nothing new to run',
+      cost: 'resets on deploy',
+    });
+    expect(redis.hinge?.answers).toEqual([
+      { answer: 'Yes', option: 1 },
+      { answer: 'No', option: 2 },
+    ]);
+    // The older fields still describe the plan's choice and the alternatives.
+    expect(redis.planChoice).toBe('Keep counters in Redis, shared across instances.');
+    expect(redis.alternatives).toEqual(['In memory']);
+  });
+
+  it('still reads the older shape, without options or a hinge', () => {
+    const r = parseBreakdown(LEGACY_BREAKDOWN, ctx);
+    if (!r.ok) throw new Error('parse failed');
+    const redis = r.read.calls[0]!;
+    expect(redis.question).toBe('Store counts in Redis');
+    expect(redis.options.map((o) => o.label)).toEqual([
+      'Counters live in Redis, shared across instances',
+      'In-memory counters',
+    ]);
+    expect(redis.hinge).toBeUndefined();
+    expect(r.read.gist).toBe('');
+  });
+
+  it('drops a hinge whose answers point at options that do not exist', () => {
+    const odd = JSON.parse(RATE_LIMIT_BREAKDOWN);
+    odd.calls[1].hinge.answers[1].option = 7;
+    const r = parseBreakdown(JSON.stringify(odd), ctx);
+    if (!r.ok) throw new Error('parse failed');
+    expect(r.read.calls[0]!.hinge).toBeUndefined();
   });
 
   it("anchors each quote to the plan's own words, ignoring Markdown", () => {
     const r = parseBreakdown(RATE_LIMIT_BREAKDOWN, ctx);
     if (!r.ok) throw new Error('parse failed');
-    for (const c of r.calls) {
+    for (const c of r.read.calls) {
       expect(c.quoteSpan).toBeDefined();
       expect(ctx.plan.body.slice(c.quoteSpan!.start, c.quoteSpan!.end)).toBe(c.planQuote);
     }
     // The model quoted without backticks; the span still covers the original text.
-    expect(r.calls[1]!.planQuote).toContain('`src/server.ts`');
+    expect(r.read.calls[1]!.planQuote).toContain('`src/server.ts`');
   });
 
   it('drops evidence from files Frank never sent', () => {
@@ -51,9 +104,9 @@ describe('parseBreakdown', () => {
     });
     const r = parseBreakdown(bad, ctx);
     if (!r.ok) throw new Error('parse failed');
-    expect(r.calls[0]!.evidence).toEqual([]);
+    expect(r.read.calls[0]!.evidence).toEqual([]);
     // "contradicted" without evidence isn't allowed to stand.
-    expect(r.calls[0]!.contradicted).toBe(false);
+    expect(r.read.calls[0]!.contradicted).toBe(false);
   });
 
   it('clears a quote that is not in the plan', () => {
@@ -63,7 +116,7 @@ describe('parseBreakdown', () => {
     );
     const r = parseBreakdown(invented, ctx);
     if (!r.ok) throw new Error('parse failed');
-    const redis = r.calls.find((c) => c.title === 'Store counts in Redis')!;
+    const redis = r.read.calls.find((c) => c.title === 'Counter storage')!;
     expect(redis.planQuote).toBe('');
     expect(redis.quoteSpan).toBeUndefined();
   });
@@ -83,7 +136,7 @@ describe('parseBreakdown', () => {
     });
     const r = parseBreakdown(many, ctx);
     if (!r.ok) throw new Error('parse failed');
-    expect(r.calls).toHaveLength(5);
+    expect(r.read.calls).toHaveLength(5);
   });
 
   it('reports what is wrong with malformed output', () => {
@@ -136,6 +189,7 @@ describe('runBreakdown', () => {
     if (r.status !== 'calls') return;
     expect(r.via).toBe('json');
     expect(r.calls[0]!.contradicted).toBe(true);
+    expect(r.gist).toMatch(/^Adds a per-key limit/);
   });
 
   it('repairs once when the first answer is broken', async () => {
@@ -165,7 +219,7 @@ describe('runBreakdown', () => {
       new ScriptedBrain(['{"calls":[]}']),
       loadFixture('tidy-rename'),
     );
-    expect(r).toEqual({ status: 'nothing', via: 'json' });
+    expect(r).toEqual({ status: 'nothing', via: 'json', gist: '', fine: [] });
   });
 
   it('fails clearly when the brain errors', async () => {
@@ -174,5 +228,35 @@ describe('runBreakdown', () => {
       ctx,
     );
     expect(r).toEqual({ status: 'failed', error: 'Claude Code is not signed in' });
+  });
+});
+
+describe('the read, streaming in', () => {
+  it('shows the gist, then each call as soon as it is complete', async () => {
+    const seen: PartialRead[] = [];
+    const brain = new ScriptedBrain([RATE_LIMIT_BREAKDOWN]);
+    const r = await runBreakdown(brain, ctx, undefined, (p) => seen.push(p));
+    expect(seen[0]).toEqual({
+      gist: expect.stringMatching(/^Adds a per-key/),
+      calls: [],
+    });
+    expect(seen.map((p) => p.calls.length)).toEqual([0, 1, 2, 3]);
+    // While streaming, calls are numbered in arrival order...
+    expect(seen[1]!.calls[0]).toMatchObject({ id: '1', title: 'New dependencies' });
+    // ...and the final read ranks them.
+    if (r.status === 'calls') expect(r.calls[0]!.title).toBe('Counter storage');
+  });
+
+  it('never throws on half an answer', () => {
+    const half = RATE_LIMIT_BREAKDOWN.slice(
+      0,
+      RATE_LIMIT_BREAKDOWN.indexOf('Counter storage'),
+    );
+    const p = parsePartialRead(half, ctx);
+    expect(p.calls.map((c) => c.title)).toEqual(['New dependencies']);
+    expect(parsePartialRead('{"gist":"Adds a lim', ctx)).toEqual({ gist: '', calls: [] });
+    expect(
+      parsePartialRead('{"gist":"A \\"quoted\\" plan","calls":[{"title":"x}"', ctx).gist,
+    ).toBe('A "quoted" plan');
   });
 });
