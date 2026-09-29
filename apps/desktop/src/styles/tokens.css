@@ -59,7 +59,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --surface: #1b2421;
     --surface-sunk: #151d1a;
     --ink: #e6ece9;
@@ -69,5 +69,20 @@
     --duck-ink: #f2b53a;
     --bill: #f0763b;
     --on-ink: #1b2421;
+    color-scheme: dark;
   }
+}
+
+/* An explicit theme choice, where the host sets one. */
+:root[data-theme='dark'] {
+  --surface: #1b2421;
+  --surface-sunk: #151d1a;
+  --ink: #e6ece9;
+  --ink-muted: #98a6a0;
+  --rule: #2c3833;
+  --duck: #f2b53a;
+  --duck-ink: #f2b53a;
+  --bill: #f0763b;
+  --on-ink: #1b2421;
+  color-scheme: dark;
 }

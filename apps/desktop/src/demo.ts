@@ -155,7 +155,22 @@ export interface DemoOptions {
   voiceModel?: boolean;
   /** What the pretend microphone hears, in turn. */
   utterances?: string[];
+  /** In a browser: speak with the browser's voice, and copy to the real clipboard. */
+  live?: boolean;
+  /** Told what the pretend microphone will hear next. */
+  onNextUtterance?: (next: string | undefined) => void;
 }
+
+/** A run through the sample plan by voice, one line per hold. */
+export const DEMO_SCRIPT = [
+  'no',
+  'what would you do?',
+  'take it',
+  'no',
+  'take it',
+  'keep it',
+  "that's it",
+];
 
 export function demoHost(
   opts: DemoOptions = {},
@@ -174,9 +189,9 @@ export function demoHost(
   const voiceHandlers: ((e: VoiceEvent) => void)[] = [];
   const voice = (e: VoiceEvent) => voiceHandlers.forEach((h) => h(e));
   let hasModel = opts.voiceModel ?? true;
-  const utterances = [
-    ...(opts.utterances ?? ['Just one instance, honestly.', 'no', 'go with in memory']),
-  ];
+  const utterances = [...(opts.utterances ?? DEMO_SCRIPT)];
+  const announce = () => opts.onNextUtterance?.(utterances[0]);
+  announce();
   let levels: ReturnType<typeof setInterval> | undefined;
   const plans = opts.plans ?? [
     { ...samplePlan(), origin: '~/.claude/plans/jaunty-petting-nebula.md' },
@@ -296,6 +311,7 @@ export function demoHost(
     },
     async copy(text) {
       copied.push(text);
+      if (opts.live) await navigator.clipboard?.writeText(text).catch(() => {});
     },
     async openUrl(url) {
       log(`open ${url}`);
@@ -327,6 +343,7 @@ export function demoHost(
       voice({ type: 'transcribing' });
       if (delay) await sleep(delay * 12);
       voice({ type: 'heard', text: utterances.shift() ?? '' });
+      announce();
     },
     async downloadVoiceModel() {
       for (const fraction of [0.2, 0.55, 0.9, 1]) {
@@ -338,10 +355,20 @@ export function demoHost(
     },
     async speak(text) {
       log(`speak ${text}`);
+      const synth = opts.live ? globalThis.speechSynthesis : undefined;
+      if (synth) {
+        const line = new SpeechSynthesisUtterance(text);
+        line.onend = line.onerror = () => voice({ type: 'spoken' });
+        synth.cancel();
+        synth.speak(line);
+        return;
+      }
       if (delay) await sleep(delay * 60);
       voice({ type: 'spoken' });
     },
-    async stopSpeaking() {},
+    async stopSpeaking() {
+      if (opts.live) globalThis.speechSynthesis?.cancel();
+    },
     onVoice(handler) {
       voiceHandlers.push(handler);
     },

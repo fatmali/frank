@@ -1,6 +1,6 @@
-import '@fontsource/monaspace-neon/400.css';
-import '@fontsource/monaspace-neon/600.css';
-import '@fontsource/monaspace-radon/400.css';
+import '@fontsource/monaspace-neon/latin-400.css';
+import '@fontsource/monaspace-neon/latin-600.css';
+import '@fontsource/monaspace-radon/latin-400.css';
 import './styles/tokens.css';
 import './styles/panel.css';
 import { createRoot } from 'react-dom/client';
@@ -34,16 +34,31 @@ async function main() {
     return;
   }
 
-  let host: Host;
   if (inTauri) {
-    host = (await import('./tauri-host.ts')).tauriHost;
-  } else {
-    // In a browser: the demo, with a scripted brain (`pnpm demo`).
-    document.documentElement.classList.add('demo');
-    const { demoHost } = await import('./demo.ts');
-    host = demoHost({
+    const host = (await import('./tauri-host.ts')).tauriHost;
+    root.render(<Panel controller={new PanelController(host)} />);
+    return;
+  }
+
+  // In a browser: the demo, with a pretend brain and microphone (`pnpm demo`).
+  document.documentElement.classList.add('demo');
+  const { demoHost } = await import('./demo.ts');
+  const { DemoPage } = await import('./DemoPage.tsx');
+  let nextLine: string | undefined;
+  const render = (controller: PanelController) =>
+    root.render(
+      <DemoPage controller={controller} nextLine={nextLine} onRestart={restart} />,
+    );
+  let controller: PanelController;
+  function restart() {
+    const host: Host = demoHost({
+      live: true,
       firstRun: params.has('first-run'),
       voiceModel: params.get('voice-model') !== 'no',
+      onNextUtterance: (next) => {
+        nextLine = next;
+        if (controller) render(controller);
+      },
       ...(params.has('no-plan') ? { plans: [] } : {}),
       ...(params.has('signed-out')
         ? {
@@ -54,9 +69,11 @@ async function main() {
           }
         : {}),
     });
+    controller = new PanelController(host);
+    root.render(null);
+    render(controller);
   }
-  const controller = new PanelController(host);
-  root.render(<Panel controller={controller} />);
+  restart();
 }
 
 void main();
