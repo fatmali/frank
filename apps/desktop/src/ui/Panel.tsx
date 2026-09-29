@@ -8,6 +8,7 @@ import { CallView } from './CallView.tsx';
 import { TheRead } from './TheRead.tsx';
 import { YourCalls } from './YourCalls.tsx';
 import { Settings } from './Settings.tsx';
+import { VoiceMenu } from './VoiceMenu.tsx';
 import { BrainError, ContextCheck, NoPlan, Nothing, Preparing } from './States.tsx';
 import { ControllerContext, usePanel } from './store.ts';
 
@@ -23,7 +24,7 @@ function PanelFrame({ controller: c }: { controller: PanelController }) {
   const state = usePanel();
   const frame = useRef<HTMLDivElement>(null);
   const composer = useRef<ComposerHandle>(null);
-  const { view, settingsOpen, pickerOpen } = state;
+  const { view, settingsOpen, pickerOpen, voiceMenuOpen } = state;
 
   // Opening: start (or resume), and focus the composer.
   useEffect(() => {
@@ -166,6 +167,11 @@ function PanelFrame({ controller: c }: { controller: PanelController }) {
       }
 
       const key = e.key.toLowerCase();
+      if (key === 'v' && inSessionView(s.view.name)) {
+        e.preventDefault();
+        c.toggleVoiceMenu();
+        return;
+      }
       if (s.view.name === 'read' && /^[1-5]$/.test(key) && !s.reading) {
         const call = s.calls[Number(key) - 1];
         if (call) {
@@ -255,8 +261,13 @@ function PanelFrame({ controller: c }: { controller: PanelController }) {
       {chrome && <PlanHeader />}
       {chrome && pickerOpen && <PlanPicker />}
       <main className="panel-body">{body}</main>
+      {showComposer && inSession && voiceMenuOpen && <VoiceMenu />}
       {showComposer && <Composer ref={composer} />}
       {chrome && (inSession || state.notice) && <NoteFooter />}
     </div>
   );
+}
+
+function inSessionView(name: string): boolean {
+  return name === 'read' || name === 'call' || name === 'calls';
 }

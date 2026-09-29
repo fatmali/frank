@@ -272,7 +272,8 @@ stopping here.)
 | `D` | Drop this step |
 | `S` | Something else: say what the agent should do instead |
 | `→` / `←` | Next call (this one stays as planned) / previous call |
-| `Space` (hold) | Talk, when the composer is empty |
+| `Space` | Hold: talk. Tap: talk freely (hands-free), or stop. When the composer is empty. |
+| `V` | Frank's voice: pick how he sounds, without leaving the call |
 | `⌘↵` | Copy the note (from any view) |
 | `⌘P` | Switch plan, or paste one |
 | `Esc` | Back out of what's open, else close. Nothing is lost. |
@@ -318,8 +319,10 @@ M1.
   gets text only. A setting chooses: when I talk to him (default), always,
   never. Any key, or talking again, stops him mid-sentence.
 - **A voice worth hearing.** Natural voices (Kokoro-82M, on this Mac) sound
-  like a person, not a screen reader. Settings, Voice lists them first,
-  each with a Listen button: Michael, Heart, George, Emma, Fenrir, Bella.
+  like a person, not a screen reader. The voice button next to the
+  microphone (or `V`) opens Frank's voice right in the panel, the same
+  picker as in Settings, Voice. Natural voices come first, each with a
+  Listen button, and choosing one says a line in it: Michael, Heart, George, Emma, Fenrir, Bella.
   They're a one-time 212 MB download, offered right there, with progress.
   Once installed, Michael is the default. Until then, and for anyone who
   prefers one, the macOS voices are listed after (best installed first).

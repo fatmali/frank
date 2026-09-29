@@ -45,6 +45,7 @@ export const Composer = forwardRef<ComposerHandle>(function Composer(_, ref) {
     reading,
     handsFree,
     downloads,
+    voiceMenuOpen,
   } = usePanel();
   const [text, setText] = useState('');
   const input = useRef<HTMLTextAreaElement>(null);
@@ -210,32 +211,58 @@ export const Composer = forwardRef<ComposerHandle>(function Composer(_, ref) {
           }}
         />
         {view.name !== 'no-plan' && (
-          <button
-            className="mic"
-            aria-label="Talk to Frank hands-free. He hears when you've finished."
-            title="Talk freely (tap Space)"
-            onClick={() => void c.toggleHandsFree()}
-          >
-            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-              <rect
-                x="5.5"
-                y="1.5"
-                width="5"
-                height="8.5"
-                rx="2.5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.4"
-              />
-              <path
-                d="M3 7.5a5 5 0 0 0 10 0M8 12.5v2"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.4"
-                strokeLinecap="round"
-              />
-            </svg>
-          </button>
+          <div className="composer-tools">
+            <button
+              className={voiceMenuOpen ? 'tool on' : 'tool'}
+              aria-label="Frank's voice"
+              aria-expanded={voiceMenuOpen}
+              title="Frank's voice (V)"
+              onClick={() => c.toggleVoiceMenu()}
+            >
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                <path
+                  d="M2.5 6v4h2.5l3.5 3V3L5 6z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M11 5.5a3.5 3.5 0 0 1 0 5M12.8 3.5a6 6 0 0 1 0 9"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </button>
+            <button
+              className="tool"
+              aria-label="Talk to Frank hands-free. He hears when you've finished."
+              title="Talk freely (tap Space)"
+              onClick={() => void c.toggleHandsFree()}
+            >
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                <rect
+                  x="5.5"
+                  y="1.5"
+                  width="5"
+                  height="8.5"
+                  rx="2.5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                />
+                <path
+                  d="M3 7.5a5 5 0 0 0 10 0M8 12.5v2"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </button>
+          </div>
         )}
       </div>
     </div>

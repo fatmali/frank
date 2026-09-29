@@ -852,7 +852,7 @@ select {
   display: block;
   width: 100%;
   max-height: 120px;
-  padding: var(--space-2) 36px var(--space-2) var(--space-3);
+  padding: var(--space-2) 64px var(--space-2) var(--space-3);
   border: var(--hairline) solid var(--rule);
   border-radius: var(--radius-inset);
   background: var(--surface-sunk);
@@ -876,24 +876,58 @@ select {
   border-color: var(--duck);
 }
 
-.mic {
+.composer-tools {
   position: absolute;
   top: 50%;
   right: var(--space-2);
+  display: flex;
+  gap: var(--space-1);
+  transform: translateY(-50%);
+}
+
+.tool {
   display: grid;
   place-items: center;
   width: 24px;
   height: 24px;
   padding: 0;
   border: 0;
+  border-radius: var(--radius-inset);
   background: none;
   color: var(--ink-muted);
-  transform: translateY(-50%);
   cursor: pointer;
 }
 
-.mic:hover {
+.tool:hover,
+.tool.on {
   color: var(--ink);
+}
+
+.tool.on {
+  background: var(--surface-sunk);
+}
+
+/* ---------------------------------------------------------------- voice menu */
+
+.voice-menu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: var(--hairline) solid var(--rule);
+  background: var(--surface-sunk);
+}
+
+.voice-menu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.voice-menu-head h2 {
+  margin: 0;
+  font-size: var(--text-body);
+  font-weight: var(--weight-strong);
 }
 
 .composer-hint {
@@ -1293,6 +1327,10 @@ select {
   align-items: center;
   gap: var(--space-2);
   min-height: 28px;
+}
+
+.voice-picker input {
+  accent-color: var(--duck);
 }
 
 .voice-row label {

@@ -56,6 +56,8 @@ export interface PanelState {
   config: Config | undefined;
   settingsOpen: boolean;
   pickerOpen: boolean;
+  /** Frank's voice, picked from the panel (the voice button, or V). */
+  voiceMenuOpen: boolean;
   plan: Plan | undefined;
   plans: Plan[];
   /** A plan newer than the one in the session, offered on the next summon. */
@@ -123,6 +125,7 @@ export class PanelController {
     config: undefined,
     settingsOpen: false,
     pickerOpen: false,
+    voiceMenuOpen: false,
     plan: undefined,
     plans: [],
     newerPlan: undefined,
@@ -441,8 +444,12 @@ export class PanelController {
     if (this.state.newerPlan) await this.load(this.state.newerPlan);
   }
 
+  toggleVoiceMenu(open = !this.state.voiceMenuOpen): void {
+    this.set({ voiceMenuOpen: open, pickerOpen: false });
+  }
+
   togglePicker(open = !this.state.pickerOpen): void {
-    this.set({ pickerOpen: open });
+    this.set({ pickerOpen: open, voiceMenuOpen: false });
     if (open) void this.host.recentPlans().then((plans) => this.set({ plans }));
   }
 
@@ -860,13 +867,14 @@ export class PanelController {
     if (this.state.voice.state === 'needs-pack') return this.declinePack();
     if (this.state.handsFree) return this.stopHandsFree();
     if (this.state.changing) return this.cancelChange();
+    if (this.state.voiceMenuOpen) return this.toggleVoiceMenu(false);
     if (this.state.pickerOpen) return this.togglePicker(false);
     if (this.state.settingsOpen) return this.closeSettings();
     await this.host.hidePanel();
   }
 
   openSettings(): void {
-    this.set({ settingsOpen: true, pickerOpen: false });
+    this.set({ settingsOpen: true, pickerOpen: false, voiceMenuOpen: false });
     void this.host.setPinned(true);
   }
 

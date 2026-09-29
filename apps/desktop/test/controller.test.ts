@@ -365,3 +365,18 @@ describe('talking freely', () => {
     await settle(c, (x) => x.getSnapshot().handsFree?.state === 'waiting');
   });
 });
+
+describe("Frank's voice", () => {
+  it('opens from the panel and closes on Esc without closing the panel', async () => {
+    const { host, c } = await startSession();
+    c.beginCalls();
+    c.toggleVoiceMenu();
+    expect(c.getSnapshot().voiceMenuOpen).toBe(true);
+    c.togglePicker(true);
+    expect(c.getSnapshot().voiceMenuOpen).toBe(false);
+    c.toggleVoiceMenu();
+    await c.close();
+    expect(c.getSnapshot().voiceMenuOpen).toBe(false);
+    expect(host.calls).not.toContain('hide');
+  });
+});
