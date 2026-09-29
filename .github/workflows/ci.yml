@@ -6,8 +6,8 @@ on:
   pull_request:
 
 jobs:
-  engine:
-    name: Engine (typecheck + tests)
+  typescript:
+    name: TypeScript (engine + desktop UI)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -17,8 +17,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @frank/engine typecheck
-      - run: pnpm --filter @frank/engine test
+      - run: pnpm -r typecheck
+      - run: pnpm -r test
       - run: pnpm format:check
 
   core:
@@ -37,3 +37,28 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
+
+  desktop:
+    name: Desktop app (macOS build)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: pnpm install --frozen-lockfile
+      - run: cargo clippy -p frank-desktop --all-targets -- -D warnings
+      - run: pnpm --filter @frank/desktop tauri build --bundles app
+      # Zip with ditto so the app keeps its permissions and structure.
+      - run: ditto -c -k --keepParent target/release/bundle/macos/Frank.app Frank-macos.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Frank-macos
+          path: Frank-macos.zip
+          retention-days: 14

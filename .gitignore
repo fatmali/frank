@@ -6,3 +6,5 @@ target/
 # local research notes, never committed
 research_notes/
 reports/
+apps/desktop/src-tauri/gen/
+apps/desktop/src-tauri/icons/app-icon.png

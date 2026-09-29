@@ -1,0 +1,73 @@
+/*
+ * Frank's design tokens (docs/ux.md §6). Components use these and nothing
+ * else: no colour, font, size, radius or duration is written anywhere else.
+ */
+:root {
+  color-scheme: light dark;
+
+  /* Colour. Pond-water neutrals; duck amber is ink, never a filled area;
+     bill orange means one thing only: the code contradicts the plan. */
+  --surface: #fbfcfb;
+  --surface-sunk: #f1f4f2;
+  --ink: #1c2421;
+  --ink-muted: #5b6863;
+  --rule: #dce2df;
+  --duck: #e8a317;
+  --duck-ink: #8a5d00;
+  --bill: #c2410c;
+  --on-ink: #fbfcfb;
+
+  /* Type. System UI for the interface and Frank's words; Monaspace Neon for
+     plans and code; Monaspace Radon for Frank's margin marks. */
+  --font-ui:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI Variable Text',
+    'Segoe UI', Cantarell, 'Helvetica Neue', sans-serif;
+  --font-code: 'Monaspace Neon', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-mark: 'Monaspace Radon', 'Monaspace Neon', ui-monospace, monospace;
+  --text-meta: 11px;
+  --text-code: 12px;
+  --text-body: 13px;
+  --text-title: 15px;
+  --text-heading: 18px;
+  --leading-body: 1.45;
+  --leading-code: 1.35;
+  --weight-regular: 400;
+  --weight-strong: 600;
+
+  /* Space: a 4 pt grid. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --row: 36px;
+  --margin-col: 28px;
+  --panel-width: 480px;
+
+  /* Shape. The panel takes the OS popover radius; insets are 6; the rest is square. */
+  --radius-panel: 12px;
+  --radius-inset: 6px;
+  --hairline: 1px;
+  --focus-ring: 2px;
+
+  /* Motion. One orchestrated moment (the marks); everything else answers a key. */
+  --t-open: 90ms;
+  --t-note: 150ms;
+  --t-mark: 120ms;
+  --t-mark-stagger: 80ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #1b2421;
+    --surface-sunk: #151d1a;
+    --ink: #e6ece9;
+    --ink-muted: #98a6a0;
+    --rule: #2c3833;
+    --duck: #f2b53a;
+    --duck-ink: #f2b53a;
+    --bill: #f0763b;
+    --on-ink: #1b2421;
+  }
+}

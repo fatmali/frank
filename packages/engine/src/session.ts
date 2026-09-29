@@ -52,7 +52,7 @@ export class Session {
     const text = call
       ? `What would you do about "${call.title}"? Give me a clear recommendation, the reason, and what would change your answer.`
       : 'What would you do? Give me a clear recommendation, the reason, and what would change your answer.';
-    return this.turn(text, this.selected, signal);
+    return this.turn(text, this.selected, signal, { shown: 'What would you do?' });
   }
 
   /** Records a call. Returns the next call still to make, if any. */
@@ -103,11 +103,12 @@ export class Session {
     text: string,
     callId: string | undefined,
     signal: AbortSignal | undefined,
-    opts: { hiddenPrompt?: boolean } = {},
+    opts: { hiddenPrompt?: boolean; shown?: string } = {},
   ): AsyncIterable<string> {
     const request = this.buildRequest(text, callId);
     // Opening prompts are Frank's own instructions, not something the developer said.
-    if (!opts.hiddenPrompt) this.turns.push(withCall({ role: 'user', text }, callId));
+    if (!opts.hiddenPrompt)
+      this.turns.push(withCall({ role: 'user', text: opts.shown ?? text }, callId));
     let reply = '';
     try {
       for await (const chunk of this.brain.stream(request, signal)) {

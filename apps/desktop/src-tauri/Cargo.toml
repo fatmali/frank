@@ -1,0 +1,22 @@
+[package]
+name = "frank-desktop"
+version = "0.1.0"
+description = "Frank's desktop app: the menu bar duck, the hotkey, and the panel."
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+frank-core = { path = "../../../crates/frank-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", features = ["tray-icon", "image-png", "macos-private-api"] }
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-opener = "2"
+tokio = { version = "1", features = ["sync", "time"] }

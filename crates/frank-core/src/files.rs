@@ -156,8 +156,7 @@ pub fn is_secret_path(p: &Path) -> bool {
             name.as_str(),
             ".npmrc" | ".pypirc" | ".netrc" | ".htpasswd" | "credentials" | "credentials.json"
         )
-        || name.starts_with("secrets.")
-        || name.starts_with("secret.")
+        || ((name.starts_with("secrets.") || name.starts_with("secret.")) && !is_source(&name))
         || [
             ".pem",
             ".key",
@@ -172,6 +171,17 @@ pub fn is_secret_path(p: &Path) -> bool {
         .iter()
         .any(|ext| name.ends_with(ext));
     in_secret_dir || secret_name
+}
+
+/// Source code, as opposed to data: `secrets.rs` is code about secrets,
+/// `secrets.yaml` holds them.
+fn is_source(name: &str) -> bool {
+    const CODE: &[&str] = &[
+        "rs", "ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "go", "rb", "java", "kt", "swift", "c",
+        "h", "cc", "cpp", "hpp", "cs", "php", "scala", "ex", "exs", "md",
+    ];
+    name.rsplit_once('.')
+        .is_some_and(|(_, ext)| CODE.contains(&ext))
 }
 
 fn load(path: &Path, limit: usize) -> Result<(String, bool), Skip> {
@@ -313,6 +323,8 @@ mod tests {
             "id_rsa",
             ".aws/credentials",
             "secrets.yml",
+            "config/secrets.json",
+            "secret.env",
             ".git/config",
         ] {
             assert!(is_secret_path(Path::new(p)), "{p} should be secret");
@@ -322,6 +334,8 @@ mod tests {
             "environment.md",
             "keyboard.ts",
             "src/tokens.css",
+            "crates/core/src/secrets.rs",
+            "lib/secrets.ts",
         ] {
             assert!(!is_secret_path(Path::new(p)), "{p} is fine");
         }

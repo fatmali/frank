@@ -1,6 +1,8 @@
 [workspace]
 resolver = "2"
-members = ["crates/frank-core"]
+members = ["crates/frank-core", "apps/desktop/src-tauri"]
+# The desktop app needs a system WebView to build; CI builds it on macOS.
+default-members = ["crates/frank-core"]
 
 [workspace.package]
 edition = "2024"

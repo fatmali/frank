@@ -65,6 +65,9 @@ describe('Session', () => {
     expect(brain.requests[2]!.messages.at(-1)!.content).toMatch(
       /What would you do about "Store counts in Redis"/,
     );
+    // The thread shows what the developer asked, not Frank's instruction.
+    const asked = s.turns.filter((t) => t.role === 'user').map((t) => t.text);
+    expect(asked.at(-1)).toBe('What would you do?');
   });
 
   it('moves to the next open call after each decision', () => {

@@ -76,7 +76,7 @@ fn key_option(
         detection: match found {
             Some(_) => Detection::Ready,
             None => Detection::Missing {
-                fix: format!("No key yet. Paste one in Settings, or set {var}."),
+                fix: format!("No key yet. Add one, or set {var}."),
             },
         },
     }
