@@ -55,7 +55,6 @@ fn emit(app: &AppHandle, event: VoiceEvent) {
 pub struct Voice {
     recording: Mutex<Option<Recording>>,
     whisper: Mutex<Option<Arc<whisper_rs::WhisperContext>>>,
-    speaker: Mutex<Option<std::process::Child>>,
     downloading: AtomicBool,
 }
 
@@ -80,7 +79,7 @@ pub fn model_path() -> PathBuf {
 impl Voice {
     /// Starts listening. Without the speech model, asks for it instead.
     pub fn start(&self, app: &AppHandle) {
-        self.stop_speaking();
+        app.state::<crate::speech::Speech>().stop();
         if !model_path().exists() {
             emit(
                 app,
@@ -109,6 +108,11 @@ impl Voice {
             started: Instant::now(),
         });
         emit(app, VoiceEvent::Listening);
+        // Load the model while the developer talks, not after.
+        let warm = app.clone();
+        std::thread::spawn(move || {
+            let _ = warm.state::<Voice>().whisper();
+        });
     }
 
     /// Stops listening and transcribes, off the main thread.
@@ -161,7 +165,9 @@ impl Voice {
 
     fn transcribe(&self, captured: &Captured) -> Result<String, String> {
         let ctx = self.whisper()?;
+        let started = Instant::now();
         let audio = resample(&captured.samples, captured.rate, WHISPER_RATE);
+        let seconds = audio.len() as f32 / WHISPER_RATE as f32;
         let mut state = ctx
             .create_state()
             .map_err(|e| format!("Couldn't start transcribing: {e}"))?;
@@ -174,6 +180,10 @@ impl Voice {
         params.set_print_timestamps(false);
         params.set_no_context(true);
         params.set_suppress_blank(true);
+        params.set_single_segment(true);
+        // Whisper pads everything to 30 seconds; a window sized to what was
+        // said is several times faster for a sentence or two.
+        params.set_audio_ctx(audio_ctx(seconds));
         let threads = std::thread::available_parallelism().map_or(4, |n| n.get().min(8));
         params.set_n_threads(threads as i32);
         state
@@ -183,6 +193,10 @@ impl Voice {
             .as_iter()
             .filter_map(|s| s.to_str_lossy().ok().map(|t| t.into_owned()))
             .collect();
+        eprintln!(
+            "frank: transcribed {seconds:.1} s of speech in {} ms",
+            started.elapsed().as_millis()
+        );
         Ok(clean_transcript(&text.join(" ")))
     }
 
@@ -225,48 +239,6 @@ impl Voice {
                     },
                 );
             }
-        }
-    }
-
-    /// Speaks with the system voice. Stops whatever Frank was saying.
-    pub fn speak(&self, app: &AppHandle, text: &str) {
-        self.stop_speaking();
-        let Some(mut command) = speech_command(text) else {
-            emit(app, VoiceEvent::Spoken);
-            return;
-        };
-        let Ok(child) = command.spawn() else {
-            emit(app, VoiceEvent::Spoken);
-            return;
-        };
-        let pid = child.id();
-        *lock(&self.speaker) = Some(child);
-        let app = app.clone();
-        std::thread::spawn(move || {
-            // Wait without holding the lock, so stop_speaking can kill it.
-            loop {
-                std::thread::sleep(Duration::from_millis(100));
-                let voice = app.state::<Voice>();
-                let mut slot = lock(&voice.speaker);
-                match slot.as_mut() {
-                    Some(child) if child.id() == pid => {
-                        if !matches!(child.try_wait(), Ok(None)) {
-                            *slot = None;
-                            break;
-                        }
-                    }
-                    // Replaced or stopped.
-                    _ => break,
-                }
-            }
-            emit(&app, VoiceEvent::Spoken);
-        });
-    }
-
-    pub fn stop_speaking(&self) {
-        if let Some(mut child) = lock(&self.speaker).take() {
-            let _ = child.kill();
-            let _ = child.wait();
         }
     }
 }
@@ -414,28 +386,10 @@ fn strip_bracketed(text: &str) -> String {
     out
 }
 
-/// The system's text-to-speech, if there is one.
-fn speech_command(text: &str) -> Option<std::process::Command> {
-    let text = text.trim();
-    if text.is_empty() {
-        return None;
-    }
-    #[cfg(target_os = "macos")]
-    {
-        let mut c = std::process::Command::new("/usr/bin/say");
-        c.arg("--").arg(text);
-        Some(c)
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        let path = frank_core::env::search_path();
-        let bin = ["espeak-ng", "espeak", "spd-say"]
-            .into_iter()
-            .find_map(|b| frank_core::env::which_in(b, &path))?;
-        let mut c = std::process::Command::new(bin);
-        c.arg(text);
-        Some(c)
-    }
+/// Whisper's encoder context for a clip: 50 frames a second, with a little
+/// headroom, never below what keeps short clips accurate.
+fn audio_ctx(seconds: f32) -> i32 {
+    ((seconds * 50.0).ceil() as i32 + 64).clamp(384, 1500)
 }
 
 async fn download_model(app: &AppHandle) -> Result<(), String> {
@@ -528,6 +482,13 @@ mod tests {
         std::thread::sleep(LEVEL_EVERY);
         meter.push(&[0.1; 480]);
         assert_eq!(lock(&seen).len(), 1);
+    }
+
+    #[test]
+    fn sizes_the_audio_window_to_the_clip() {
+        assert_eq!(audio_ctx(2.0), 384, "short clips keep a floor");
+        assert_eq!(audio_ctx(10.0), 564);
+        assert_eq!(audio_ctx(45.0), 1500, "never past Whisper's 30 seconds");
     }
 
     #[test]

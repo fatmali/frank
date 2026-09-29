@@ -2,6 +2,7 @@
 //! `frank-core`; these commands only move data across and keep state.
 
 use crate::shell;
+use crate::speech::{self, Speech, SystemVoice};
 use crate::state::{AppState, lock};
 use crate::voice::Voice;
 use frank_core::brain::{BrainError, BrainRequest, Detection};
@@ -329,14 +330,28 @@ pub async fn voice_download_model(app: AppHandle, voice: State<'_, Voice>) -> Re
     Ok(())
 }
 
+/// Adds a sentence to what Frank is saying.
 #[tauri::command]
-pub fn speak(app: AppHandle, voice: State<'_, Voice>, text: String) {
-    voice.speak(&app, &text);
+pub fn speak(app: AppHandle, speech: State<'_, Speech>, text: String) {
+    speech.say(&app, &text);
 }
 
 #[tauri::command]
-pub fn stop_speaking(voice: State<'_, Voice>) {
-    voice.stop_speaking();
+pub fn stop_speaking(speech: State<'_, Speech>) {
+    speech.stop();
+}
+
+/// English system voices, best first, for the picker in Settings.
+#[tauri::command]
+pub async fn list_voices() -> Result<Vec<SystemVoice>, ()> {
+    Ok(tokio::task::spawn_blocking(|| speech::voices().to_vec())
+        .await
+        .unwrap_or_default())
+}
+
+#[tauri::command]
+pub fn preview_voice(app: AppHandle, speech: State<'_, Speech>, name: String) {
+    speech.preview(&app, &name);
 }
 
 /// Frank's mood, shown on the menu bar icon and sticky Frank.

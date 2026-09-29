@@ -7,6 +7,10 @@ import type { Brain, BrainRequest, Call, Context, Outcome, Turn } from './types.
  * a time. Every turn sends compact state (context, all calls with outcomes,
  * and only the current call's thread) rather than the whole transcript.
  */
+/** Added to what the developer said out loud: the answer will be heard, not read. */
+const SPOKEN =
+  '(I said this out loud and will hear your answer. Reply in one or two short spoken sentences: no lists, tables, code or file paths.)';
+
 export class Session {
   readonly context: Context;
   readonly calls: Call[];
@@ -45,13 +49,24 @@ export class Session {
     return this.turn(instruction, id, signal, { hiddenPrompt: true });
   }
 
-  /** The developer says something about the selected call (or in general, if none is selected). */
-  ask(text: string, signal?: AbortSignal): AsyncIterable<string> {
-    return this.turn(text, this.selected, signal);
+  /**
+   * The developer says something about the selected call (or in general, if
+   * none is selected). Spoken, Frank keeps his answer short enough to hear.
+   */
+  ask(
+    text: string,
+    signal?: AbortSignal,
+    opts: { spoken?: boolean } = {},
+  ): AsyncIterable<string> {
+    const request = opts.spoken ? `${text}\n\n${SPOKEN}` : text;
+    return this.turn(request, this.selected, signal, { shown: text });
   }
 
   /** "What would you do?" for the selected call. */
-  whatWouldYouDo(signal?: AbortSignal): AsyncIterable<string> {
+  whatWouldYouDo(
+    signal?: AbortSignal,
+    opts: { spoken?: boolean } = {},
+  ): AsyncIterable<string> {
     const call = this.selected ? this.call(this.selected) : undefined;
     const answered = call ? this.answers[call.id] : undefined;
     const known =
@@ -61,7 +76,8 @@ export class Session {
     const text = call
       ? `What would you do about "${call.question}"?${known} In at most three short sentences: name the option first, then the reason, then what would change your answer.`
       : 'What would you do? Give me a clear recommendation, the reason, and what would change your answer.';
-    return this.turn(text, this.selected, signal, { shown: 'What would you do?' });
+    const request = opts.spoken ? `${text}\n\n${SPOKEN}` : text;
+    return this.turn(request, this.selected, signal, { shown: 'What would you do?' });
   }
 
   /**

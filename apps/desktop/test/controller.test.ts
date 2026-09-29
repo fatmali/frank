@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PanelController, speakable } from '../src/controller.ts';
+import { PanelController, speakable, spokenSentences } from '../src/controller.ts';
 import { demoHost } from '../src/demo.ts';
 import { BrainFailure } from '../src/host.ts';
 
@@ -152,10 +152,12 @@ describe('talking to Frank', () => {
     await c.startTalking();
     await c.stopTalking();
     await settle(c, (x) => x.getSnapshot().turns.length === 2);
-    await settle(c, () => host.calls.some((x) => x.startsWith('speak')));
-    expect(host.calls.find((x) => x.startsWith('speak'))).toBe(
-      'speak In memory. You run one instance, and Redis is a new service to deploy and watch.',
-    );
+    await settle(c, () => host.calls.filter((x) => x.startsWith('speak')).length === 2);
+    // A sentence at a time, as soon as each is written; two at most.
+    expect(host.calls.filter((x) => x.startsWith('speak'))).toEqual([
+      'speak In memory.',
+      'speak You run one instance, and Redis is a new service to deploy and watch.',
+    ]);
   });
 
   it('keeps typed questions quiet', async () => {
@@ -185,6 +187,33 @@ describe('talking to Frank', () => {
     expect(c.getSnapshot().voiceError).toBe(
       "Didn't catch that. Hold, talk, then let go.",
     );
+  });
+
+  it('keeps spoken answers short, and typed ones as they were', async () => {
+    const { host, c } = await startSession({ utterances: ['Why not Redis?'] });
+    c.beginCalls();
+    await c.startTalking();
+    await c.stopTalking();
+    await settle(c, (x) => x.getSnapshot().turns.length === 2);
+    await c.send('And for two instances?');
+    const turns = c.getSnapshot().turns.filter((t) => t.role === 'user');
+    expect(turns.map((t) => t.text)).toEqual([
+      'Why not Redis?',
+      'And for two instances?',
+    ]);
+    expect(host.calls.filter((x) => x.startsWith('speak')).length).toBeGreaterThan(0);
+  });
+
+  it('waits for a sentence to finish before saying it', () => {
+    expect(spokenSentences('In memory. You run one inst', false)).toEqual(['In memory.']);
+    expect(spokenSentences('In memory. You run one inst', true)).toEqual([
+      'In memory.',
+      'You run one inst',
+    ]);
+    expect(spokenSentences('Use `v1.2` of it. Done.', false)).toEqual([
+      'Use v1.2 of it.',
+      'Done.',
+    ]);
   });
 
   it('speaks only the first two sentences, never tables or code', () => {

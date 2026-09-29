@@ -1369,3 +1369,12 @@ select {
 .fine code {
   font-size: var(--text-code);
 }
+
+.thinking::after {
+  content: '…';
+  display: inline-block;
+  width: 1ch;
+  overflow: hidden;
+  vertical-align: bottom;
+  animation: ellipsis 1.2s steps(4, end) infinite;
+}

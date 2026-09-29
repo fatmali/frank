@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { Config, TalkBack } from '../host.ts';
+import type { Config, SystemVoice, TalkBack } from '../host.ts';
 import { BrainList } from './BrainList.tsx';
 import { HotkeyRecorder } from './HotkeyRecorder.tsx';
 import { Kbd } from './Kbd.tsx';
@@ -13,12 +13,17 @@ export function Settings() {
   const { config } = usePanel();
   const [draft, setDraft] = useState<Config | undefined>(config);
   const [hotkeyError, setHotkeyError] = useState<string | null>(null);
+  const [voices, setVoices] = useState<SystemVoice[]>([]);
+  useEffect(() => {
+    void c.host.listVoices().then(setVoices);
+  }, [c]);
 
   useEffect(() => setDraft(config), [config]);
   useEffect(() => {
     void c.host.hotkeyStatus().then(setHotkeyError);
   }, [c]);
   if (!draft) return null;
+  const best = voices[0];
 
   const save = async (next: Config) => {
     setDraft(next);
@@ -115,7 +120,10 @@ export function Settings() {
           <select
             value={draft.voice?.talk_back ?? 'when-spoken'}
             onChange={(e) =>
-              void save({ ...draft, voice: { talk_back: e.target.value as TalkBack } })
+              void save({
+                ...draft,
+                voice: { ...draft.voice, talk_back: e.target.value as TalkBack },
+              })
             }
           >
             <option value="when-spoken">when I talk to him</option>
@@ -123,6 +131,41 @@ export function Settings() {
             <option value="never">never</option>
           </select>
         </label>
+        <div className="inline-field">
+          <label htmlFor="voice-name">His voice</label>
+          <select
+            id="voice-name"
+            value={draft.voice?.name ?? ''}
+            onChange={(e) =>
+              void save({ ...draft, voice: { ...draft.voice, name: e.target.value } })
+            }
+          >
+            <option value="">
+              {best ? `Best installed: ${best.name}` : 'The system voice'}
+            </option>
+            {voices.map((v) => (
+              <option key={v.name} value={v.name}>
+                {v.name}
+              </option>
+            ))}
+          </select>
+          <button
+            className="text-button"
+            disabled={!draft.voice?.name && !best}
+            onClick={() =>
+              void c.host.previewVoice(draft.voice?.name || best?.name || '')
+            }
+          >
+            Listen
+          </button>
+        </div>
+        {!voices.some((v) => v.quality !== 'standard') && (
+          <p className="quiet">
+            macOS has natural-sounding voices as a free download: System Settings,
+            Accessibility, Spoken Content, System voice, Manage Voices. Pick an English
+            voice marked Premium, then choose it here.
+          </p>
+        )}
         <p className="quiet">
           Hold the hotkey, or Space in the panel, to talk. Speech is turned into text on
           this Mac; audio is never saved or sent.

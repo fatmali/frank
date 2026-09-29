@@ -28,7 +28,15 @@ export interface Config {
   sticky: { enabled: boolean; position?: [number, number] };
   plans: { window_minutes: number };
   context: { max_file_kb: number; trusted_projects: string[] };
-  voice: { talk_back: TalkBack };
+  /** `name`: the system voice; empty or missing means the best one installed. */
+  voice: { talk_back: TalkBack; name?: string };
+}
+
+/** An installed system voice (Settings, Voice). */
+export interface SystemVoice {
+  name: string;
+  language: string;
+  quality: 'premium' | 'enhanced' | 'standard';
 }
 
 /** When Frank speaks his replies (ux.md §6.1). */
@@ -98,8 +106,11 @@ export interface Host {
   /** Stops listening and transcribes; the words arrive as a "heard" event. */
   voiceStop(): Promise<void>;
   downloadVoiceModel(): Promise<void>;
+  /** Adds a sentence to what Frank is saying. */
   speak(text: string): Promise<void>;
   stopSpeaking(): Promise<void>;
+  listVoices(): Promise<SystemVoice[]>;
+  previewVoice(name: string): Promise<void>;
   onVoice(handler: (event: VoiceEvent) => void): void;
 }
 

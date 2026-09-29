@@ -20,12 +20,15 @@ pub struct Config {
 pub struct VoiceConfig {
     /// When Frank speaks his replies: `when-spoken` (default), `always` or `never`.
     pub talk_back: String,
+    /// The system voice Frank speaks with. Empty: the best one installed.
+    pub name: String,
 }
 
 impl Default for VoiceConfig {
     fn default() -> Self {
         Self {
             talk_back: "when-spoken".into(),
+            name: String::new(),
         }
     }
 }

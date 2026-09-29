@@ -150,6 +150,16 @@ describe('Session', () => {
     expect(s.suggestion).toBeUndefined();
   });
 
+  it('asks for a short answer when the developer spoke, and records their words', async () => {
+    const brain = new ScriptedBrain(['Keep it in memory.']);
+    const s = new Session(brain, ctx, calls());
+    await drain(s.ask('why not redis', undefined, { spoken: true }));
+    expect(brain.requests[0]!.messages.at(-1)!.content).toMatch(
+      /why not redis\n\n\(I said this out loud .* one or two short spoken sentences/,
+    );
+    expect(s.turns[0]).toEqual({ role: 'user', text: 'why not redis', callId: '1' });
+  });
+
   it('comes back to calls skipped earlier', () => {
     const s = new Session(new ScriptedBrain([]), ctx, calls());
     expect(s.neighbour('1', 1)).toBe('2');

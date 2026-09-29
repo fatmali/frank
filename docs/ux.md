@@ -301,9 +301,19 @@ M1.
   never leaves the machine and is never saved. Only the words go to the
   brain, like typing them would.
 - **He talks back when talked to.** When the developer spoke, Frank speaks
-  the first two sentences of his reply with the system voice. Typing gets
-  text only. A setting chooses: when I talk to him (default), always, never.
-  Any key, or talking again, stops him mid-sentence.
+  his reply, at most two sentences, starting with the first sentence as soon
+  as it's written rather than after the whole reply. Spoken questions ask
+  the brain for a one- or two-sentence answer, which is also faster. Typing
+  gets text only. A setting chooses: when I talk to him (default), always,
+  never. Any key, or talking again, stops him mid-sentence.
+- **A voice worth hearing.** Frank uses the most natural English voice
+  installed (macOS Premium, then Enhanced voices), or the one chosen in
+  Settings, with a Listen button. When only compact voices are installed,
+  Settings says where to get a Premium one. An on-device neural voice
+  (such as Kokoro) is the next step if system voices aren't good enough.
+- **Fast to hear you.** Transcription runs on the GPU where there is one,
+  sizes Whisper's audio window to the clip instead of padding to 30
+  seconds, and loads the model while the developer is still talking.
 
 ### 6.2 What you can say
 
@@ -329,6 +339,8 @@ Anything else is a question or a thought, and goes to Frank.
   with "Listening. Let go to send." The menu bar icon and sticky Frank show
   listening.
 - **Transcribing.** "Got it." for the moment it takes.
+- **Thinking.** "Thinking it over", and after two seconds, for how long, so
+  a slow brain never looks stuck.
 - **Heard.** What Frank heard appears as the developer's turn, exactly as
   transcribed, so a mishearing is obvious. A command shows as a line in the
   footer ("Chose In memory") instead of a turn.

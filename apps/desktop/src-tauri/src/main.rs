@@ -6,6 +6,7 @@
 
 mod commands;
 mod shell;
+mod speech;
 mod state;
 mod voice;
 
@@ -20,6 +21,7 @@ fn main() {
         )
         .manage(state::AppState::load())
         .manage(voice::Voice::default())
+        .manage(speech::Speech::default())
         .invoke_handler(tauri::generate_handler![
             commands::get_config,
             commands::save_config,
@@ -45,6 +47,8 @@ fn main() {
             commands::voice_download_model,
             commands::speak,
             commands::stop_speaking,
+            commands::list_voices,
+            commands::preview_voice,
         ])
         .setup(shell::setup)
         .on_window_event(shell::on_window_event)

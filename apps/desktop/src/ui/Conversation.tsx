@@ -1,6 +1,6 @@
 import type { Call, Evidence as EvidenceItem, FileContext, Turn } from '@frank/engine';
 import { splitSuggestion } from '@frank/engine';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Inline, Markdown } from '../Markdown.tsx';
 import { useController, usePanel } from './store.ts';
 
@@ -48,7 +48,7 @@ export function Conversation({ callId }: { callId: string | undefined }) {
               ) : slow === 'warming' ? (
                 `${c.brainName} is warming up.`
               ) : (
-                'Thinking it over'
+                <ThinkingFor />
               )}
             </p>
           )}
@@ -71,6 +71,24 @@ export function Conversation({ callId }: { callId: string | undefined }) {
         </div>
       )}
     </section>
+  );
+}
+
+/** "Thinking it over", then for how long, so a slow brain never looks stuck. */
+function ThinkingFor() {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    const started = Date.now();
+    const t = setInterval(
+      () => setSeconds(Math.floor((Date.now() - started) / 1000)),
+      500,
+    );
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <span className="thinking">
+      {seconds >= 2 ? `Thinking it over, ${seconds} s` : 'Thinking it over'}
+    </span>
   );
 }
 

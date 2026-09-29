@@ -15,6 +15,7 @@ import {
   type FailureKind,
   type Gathered,
   type Host,
+  type SystemVoice,
   type VoiceEvent,
 } from './host.ts';
 import type { Mood } from './duck.ts';
@@ -75,6 +76,8 @@ export const tauriHost: Host = {
   downloadVoiceModel: () => invoke('voice_download_model'),
   speak: (text) => invoke('speak', { text }),
   stopSpeaking: () => invoke('stop_speaking'),
+  listVoices: () => invoke<SystemVoice[]>('list_voices'),
+  previewVoice: (name) => invoke('preview_voice', { name }),
   onVoice(handler) {
     void listen<VoiceEvent>('voice', (e) => handler(e.payload));
   },

@@ -358,8 +358,9 @@ export function demoHost(
       const synth = opts.live ? globalThis.speechSynthesis : undefined;
       if (synth) {
         const line = new SpeechSynthesisUtterance(text);
-        line.onend = line.onerror = () => voice({ type: 'spoken' });
-        synth.cancel();
+        line.onend = line.onerror = () => {
+          if (!synth.speaking && !synth.pending) voice({ type: 'spoken' });
+        };
         synth.speak(line);
         return;
       }
@@ -368,6 +369,16 @@ export function demoHost(
     },
     async stopSpeaking() {
       if (opts.live) globalThis.speechSynthesis?.cancel();
+    },
+    async listVoices() {
+      return [
+        { name: 'Ava (Premium)', language: 'en-US', quality: 'premium' },
+        { name: 'Zoe (Enhanced)', language: 'en-US', quality: 'enhanced' },
+        { name: 'Samantha', language: 'en-US', quality: 'standard' },
+      ];
+    },
+    async previewVoice(name) {
+      log(`preview ${name}`);
     },
     onVoice(handler) {
       voiceHandlers.push(handler);

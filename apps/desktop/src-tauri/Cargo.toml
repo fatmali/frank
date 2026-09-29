@@ -24,3 +24,7 @@ tokio = { version = "1", features = ["sync", "time", "process", "fs", "io-util"]
 cpal = "0.18"
 whisper-rs = "0.16"
 reqwest = { version = "0.13", default-features = false, features = ["http2", "native-tls", "system-proxy"] }
+
+# Transcription on the Mac's GPU.
+[target.'cfg(target_os = "macos")'.dependencies]
+whisper-rs = { version = "0.16", features = ["metal"] }

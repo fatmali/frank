@@ -588,7 +588,7 @@ export class PanelController {
     // From the read or your calls, a question is about the whole plan.
     if (this.state.view.name !== 'call') this.session.selected = undefined;
     const s = this.session;
-    await this.stream((signal) => s.ask(t, signal), s.selected);
+    await this.stream((signal) => s.ask(t, signal, { spoken }), s.selected);
   }
 
   /** Runs a command. Returns false when it doesn't apply here. */
@@ -606,7 +606,7 @@ export class PanelController {
         return true;
       case 'take':
         if (view !== 'call') return false;
-        await this.whatWouldYouDo();
+        await this.whatWouldYouDo(this.spoken);
         return true;
       case 'choose':
         if (view !== 'call') return false;
@@ -628,10 +628,11 @@ export class PanelController {
   }
 
   /** Frank's take on the call on screen. */
-  async whatWouldYouDo(): Promise<void> {
+  async whatWouldYouDo(spoken = false): Promise<void> {
     const s = this.session;
     if (!s || this.state.streaming || this.state.view.name !== 'call') return;
-    await this.stream((signal) => s.whatWouldYouDo(signal), s.selected);
+    this.spoken = spoken;
+    await this.stream((signal) => s.whatWouldYouDo(signal, { spoken }), s.selected);
   }
 
   /** The last turn sent, so Retry can send it again after a failure. */
@@ -650,11 +651,23 @@ export class PanelController {
     this.setMood('thinking');
     this.startSlowTimers();
     let text = '';
+    // Spoken to, Frank says each sentence as soon as it's written.
+    const talk = this.shouldTalkBack(spoken);
+    let said = 0;
+    const sayReady = (done: boolean) => {
+      if (!talk || work.signal.aborted) return;
+      const ready = spokenSentences(splitSuggestion(text).text, done);
+      for (; said < ready.length; said++) {
+        if (said === 0) this.set({ voice: { state: 'speaking' } });
+        void this.host.speak(ready[said]!);
+      }
+    };
     try {
       for await (const chunk of make(work.signal)) {
         if (!text) this.stopSlowTimers();
         text += chunk;
         this.set({ streaming: { callId, text }, slow: undefined });
+        sayReady(false);
       }
     } catch (err) {
       if (!work.signal.aborted) {
@@ -669,10 +682,7 @@ export class PanelController {
       this.sync({ streaming: undefined });
       this.setMood(this.restingMood());
     }
-    if (!work.signal.aborted && text.trim() && this.shouldTalkBack(spoken)) {
-      this.set({ voice: { state: 'speaking' } });
-      void this.host.speak(speakable(splitSuggestion(text).text));
-    }
+    sayReady(true);
   }
 
   private shouldTalkBack(spoken: boolean): boolean {
@@ -873,8 +883,33 @@ export function titleOf(body: string): string {
  * What Frank says out loud: the first two sentences of his reply, without
  * tables, code or Markdown (ux.md §4).
  */
+/** How many sentences Frank says out loud. */
+const SPOKEN_SENTENCES = 2;
+
+/**
+ * The sentences of a reply that are ready to say: complete ones (or all of
+ * them once the reply is done), without tables, code or Markdown, at most
+ * two (ux.md §4).
+ */
+export function spokenSentences(reply: string, done: boolean): string[] {
+  const prose = speakableProse(done ? reply : reply.replace(/```[^`]*$/, ''));
+  // A sentence ends at . ! or ? followed by a space or the end, so v1.2 stays whole.
+  const complete = prose.match(/(?:[^.!?]|[.!?](?=\S))+[.!?]+(?=\s|$)/g) ?? [];
+  const sentences = complete.map((s) => s.trim()).filter(Boolean);
+  if (done) {
+    const rest = prose.slice(complete.join('').length).trim();
+    if (rest) sentences.push(rest);
+  }
+  return sentences.slice(0, SPOKEN_SENTENCES);
+}
+
+/** What Frank says out loud, all at once: the first two sentences. */
 export function speakable(reply: string): string {
-  const prose = reply
+  return spokenSentences(reply, true).join(' ');
+}
+
+function speakableProse(reply: string): string {
+  return reply
     .replace(/```[\s\S]*?```/g, ' ')
     .split('\n')
     .filter((l) => !/^\s*\|/.test(l))
@@ -883,6 +918,4 @@ export function speakable(reply: string): string {
     .replace(/\*\*([^*]+)\*\*|\*([^*]+)\*/g, '$1$2')
     .replace(/\s+/g, ' ')
     .trim();
-  const sentences = prose.match(/[^.!?]+[.!?]+(\s|$)/g) ?? [prose];
-  return sentences.slice(0, 2).join('').trim();
 }
