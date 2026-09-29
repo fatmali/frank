@@ -149,8 +149,8 @@ describe('talking a call through', () => {
     expect(callIntro(counters).map((l) => l.text)).toEqual([
       'Where should the counters live?',
       'The code disagrees with the plan here.',
-      'The plan goes with Redis: works across instances, but a new service to run.',
-      'Or in memory: nothing new to run, but resets on deploy.',
+      'The plan picks Redis: works across instances, but a new service to run.',
+      'Another option is in memory: nothing new to run, but resets on deploy.',
       'It comes down to: will you run more than one instance soon?',
     ]);
     expect(callIntro(counters).every((l) => l.about === 'call:1')).toBe(true);

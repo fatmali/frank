@@ -6,6 +6,7 @@
 
 mod audio_out;
 mod commands;
+mod developer_lexicon;
 mod g2p;
 mod kokoro;
 mod packs;
@@ -13,6 +14,7 @@ mod shell;
 mod speech;
 mod state;
 mod vad;
+mod verbalize;
 mod voice;
 
 fn main() {

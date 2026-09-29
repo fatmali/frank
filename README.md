@@ -244,7 +244,10 @@ Run a local model and nothing leaves your machine at all.
 
 Voice is on-device too: Frank hears you with Whisper and Silero, and talks
 with Kokoro, all running on your Mac. Audio is never saved or sent. Only the
-words go to the brain, same as typing them.
+words go to the brain, same as typing them. Before Frank talks, an on-device
+code-aware pronunciation layer handles acronyms, identifiers, versions,
+ports, paths and symbols. Each voice has a faster tuned pace, with a speed
+control in the voice picker.
 
 ---
 

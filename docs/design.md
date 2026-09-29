@@ -279,6 +279,9 @@ from `config.toml`. Agent credentials stay with the agents.
 | `plans.window_minutes` | `30` | How far back the plan finder looks |
 | `plans.sources` | all | Enabled plan-finder adapters |
 | `context.max_file_kb` | `200` | Budget for touched files read per session |
+| `voice.mode` | `voice` | `voice` talks through plans; `chat` stays in the panel |
+| `voice.name` | Michael | Selected on-device Kokoro voice |
+| `voice.pace_percent` | `100` | Relative to that voice's tuned speaking pace; the UI allows 85–120% |
 
 ### 5.3 In-memory types
 
@@ -504,11 +507,16 @@ starts after a quarter-second hold, so a tap never opens it.
 - **Spoken replies**: at most two sentences, each said as soon as it's
   written; always in voice mode, only when spoken to in chat. Any key stops
   him. Voices are Kokoro-82M (fp16 ONNX via onnxruntime, 24 kHz), with
-  Frank's own grapheme-to-phoneme step in Rust: the misaki dictionaries,
-  a developer lexicon (Redis, Postgres, JSON), numbers, acronyms, camelCase
-  and suffixes. About 0.25 s of compute per second of speech on a CPU; a
-  long first sentence is made in two so the first sound comes sooner. There
-  is no fallback voice: without the voice pack, Frank shows text.
+  Frank's own Rust speech front end: a code-aware verbalizer distinguishes
+  initialisms, spoken acronyms, identifiers, versions, ports, addresses,
+  paths and symbols before the misaki dictionaries and developer lexicon
+  produce phonemes. Unknown terms are split into known parts before they are
+  spelled. Each voice has a tuned default around 15–20% faster than the old
+  shared pace, and `voice.pace_percent` adjusts relative to it. About 0.25 s
+  of compute produces one second of speech on a CPU; a long first sentence
+  splits only at a complete semantic boundary so the first sound comes
+  sooner without breaking a thought. There is no fallback voice: without
+  the voice pack, Frank shows text.
 
 ### 6.6 Privacy and security
 

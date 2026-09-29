@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { voiceMode, type Config, type VoiceChoice, type VoiceMode } from '../host.ts';
 import { useController, usePanel } from './store.ts';
 
@@ -11,11 +11,18 @@ export function VoicePicker() {
   const c = useController();
   const { config, downloads, packs } = usePanel();
   const [voices, setVoices] = useState<VoiceChoice[]>([]);
+  const savedPace = Math.min(120, Math.max(85, config?.voice.pace_percent ?? 100));
+  const [pace, setPace] = useState(savedPace);
+  const committedPace = useRef(savedPace);
   const downloading = downloads.voices;
   useEffect(() => {
     // Again when the voices finish downloading.
     if (downloading === undefined) void c.host.listVoices().then(setVoices);
   }, [c, downloading]);
+  useEffect(() => {
+    setPace(savedPace);
+    committedPace.current = savedPace;
+  }, [savedPace]);
   if (!config) return null;
 
   const ready = voices.some((v) => v.installed);
@@ -35,6 +42,17 @@ export function VoicePicker() {
     void save({ ...config, voice: { ...config.voice, name } }).then(() => {
       void c.host.previewVoice(name);
     });
+  const commitPace = (next: number) => {
+    setPace(next);
+    if (committedPace.current === next) return;
+    committedPace.current = next;
+    void save({
+      ...config,
+      voice: { ...config.voice, pace_percent: next },
+    }).then(() => {
+      if (ready && chosen) void c.host.previewVoice(chosen);
+    });
+  };
 
   return (
     <>
@@ -87,6 +105,29 @@ export function VoicePicker() {
             )}
           </div>
         ))}
+        <div className="voice-speed">
+          <label htmlFor="voice-speed">
+            <span>Speaking speed</span>
+            <output htmlFor="voice-speed">{pace}%</output>
+          </label>
+          <input
+            id="voice-speed"
+            type="range"
+            min="85"
+            max="120"
+            step="5"
+            value={pace}
+            aria-valuetext={`${pace}% of the tuned pace`}
+            onChange={(event) => setPace(Number(event.currentTarget.value))}
+            onPointerUp={(event) => commitPace(Number(event.currentTarget.value))}
+            onKeyUp={(event) => commitPace(Number(event.currentTarget.value))}
+            onBlur={(event) => commitPace(Number(event.currentTarget.value))}
+          />
+          <div className="voice-speed-labels quiet" aria-hidden="true">
+            <span>Slower</span>
+            <span>Faster</span>
+          </div>
+        </div>
         {!ready &&
           (downloading === undefined ? (
             <div className="voice-download">

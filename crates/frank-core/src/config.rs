@@ -26,6 +26,8 @@ pub struct VoiceConfig {
     pub talk_back: String,
     /// The voice Frank speaks with, `natural:<id>`. Empty: his own.
     pub name: String,
+    /// Relative to the selected voice's tuned pace. 100 is its natural default.
+    pub pace_percent: u16,
 }
 
 impl VoiceConfig {
@@ -45,6 +47,7 @@ impl Default for VoiceConfig {
             mode: String::new(),
             talk_back: "when-spoken".into(),
             name: String::new(),
+            pace_percent: 100,
         }
     }
 }
@@ -198,6 +201,7 @@ mod tests {
         assert_eq!(cfg.hotkey, "Alt+Shift+Space");
         assert_eq!(cfg.plans.window_minutes, 30);
         assert_eq!(cfg.voice.mode(), "voice", "Frank talks by default");
+        assert_eq!(cfg.voice.pace_percent, 100);
     }
 
     #[test]
@@ -209,7 +213,12 @@ mod tests {
         std::fs::write(&path, "[voice]\ntalk_back = \"always\"\n").unwrap();
         assert_eq!(Config::load(&path).unwrap().voice.mode(), "voice");
         std::fs::write(&path, "[voice]\nmode = \"chat\"\ntalk_back = \"always\"\n").unwrap();
-        assert_eq!(Config::load(&path).unwrap().voice.mode(), "chat");
+        let config = Config::load(&path).unwrap();
+        assert_eq!(config.voice.mode(), "chat");
+        assert_eq!(
+            config.voice.pace_percent, 100,
+            "older configs get the tuned pace"
+        );
     }
 
     #[test]

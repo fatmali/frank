@@ -58,10 +58,10 @@ pub fn choices() -> Vec<VoiceChoice> {
     let installed = Pack::Voices.installed();
     kokoro::VOICES
         .iter()
-        .map(|(id, name, description)| VoiceChoice {
-            id: format!("natural:{id}"),
-            name: (*name).to_owned(),
-            description: (*description).to_owned(),
+        .map(|voice| VoiceChoice {
+            id: format!("natural:{}", voice.id),
+            name: voice.name.to_owned(),
+            description: voice.description.to_owned(),
             installed,
         })
         .collect()
@@ -73,23 +73,54 @@ fn resolve(setting: &str) -> &'static str {
     let id = setting.strip_prefix("natural:").unwrap_or(setting);
     kokoro::VOICES
         .iter()
-        .find(|(known, _, _)| *known == id)
-        .map_or(kokoro::DEFAULT_VOICE, |(known, _, _)| known)
+        .find(|voice| voice.id == id)
+        .map_or(kokoro::DEFAULT_VOICE, |voice| voice.id)
 }
 
 /// Splits a sentence so the first sound comes sooner: a long sentence is
-/// made in two, at its first comma, when the first part is a phrase in its
-/// own right. Kokoro's time grows with the length of what it says.
+/// made in two at its strongest complete boundary. Kokoro's time grows with
+/// the length of what it says.
 fn first_chunks(text: &str) -> Vec<&str> {
     if text.split_whitespace().count() < 14 {
         return vec![text];
     }
-    match text.find(", ") {
-        Some(at) if text[..at].split_whitespace().count() >= 4 => {
-            vec![&text[..=at], text[at + 2..].trim_start()]
+    for punctuation in [".!?", ";—", ":", ","] {
+        for (at, mark) in text.char_indices() {
+            if !punctuation.contains(mark) {
+                continue;
+            }
+            let end = at + mark.len_utf8();
+            let after = &text[end..];
+            if mark != '—' && after.chars().next().is_some_and(|c| !c.is_whitespace()) {
+                continue;
+            }
+            let left = text[..end].trim_end();
+            let right = text[end..].trim_start();
+            let lower_left = left.to_ascii_lowercase();
+            if mark == '.'
+                && ["e.g.", "i.e.", "vs."]
+                    .iter()
+                    .any(|abbreviation| lower_left.ends_with(abbreviation))
+            {
+                continue;
+            }
+            if left.split_whitespace().count() < 4 || right.split_whitespace().count() < 4 {
+                continue;
+            }
+            if mark == ',' && begins_with_continuation(right) {
+                continue;
+            }
+            return vec![left, right];
         }
-        _ => vec![text],
     }
+    vec![text]
+}
+
+fn begins_with_continuation(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    ["and ", "but ", "because ", "so "]
+        .iter()
+        .any(|word| lower.starts_with(word))
 }
 
 impl Speech {
@@ -104,7 +135,7 @@ impl Speech {
         self.stop();
         self.enqueue(
             app,
-            "The plan adds Redis. You run one instance, so you don't need it yet.",
+            "The API uses OAuth 2.0 and Redis. You can change this pace any time.",
             None,
             Some(voice.to_owned()),
         );
@@ -185,7 +216,9 @@ fn emit(app: &AppHandle, event: VoiceEvent) {
 /// Frank is stopped. Each sentence is made while the one before it plays.
 fn speak_queue(app: &AppHandle, generation: u64) {
     let speech = app.state::<Speech>();
-    let setting = app.state::<AppState>().config().voice.name;
+    let config = app.state::<AppState>().config().voice;
+    let setting = config.name;
+    let pace_percent = config.pace_percent;
     let Some(player) = Player::get() else {
         eprintln!("frank: no speaker to talk through");
         lock(&speech.inner).running = false;
@@ -207,6 +240,7 @@ fn speak_queue(app: &AppHandle, generation: u64) {
             }
         };
         let voice = resolve(line.voice.as_deref().unwrap_or(&setting));
+        let speed = kokoro::effective_speed(voice, pace_percent);
         // Only split when nothing is playing: then the first sound waits on it.
         let chunks = if player.pending_seconds() < 0.1 {
             first_chunks(&line.text)
@@ -215,7 +249,7 @@ fn speak_queue(app: &AppHandle, generation: u64) {
         };
         let mut id = line.id;
         for chunk in chunks {
-            match speech.kokoro().and_then(|k| k.speak(chunk, voice, 1.0)) {
+            match speech.kokoro().and_then(|k| k.speak(chunk, voice, speed)) {
                 Ok(audio) if speech.current(generation) => {
                     let mark = id.take().map(|id| {
                         let app = app.clone();
@@ -263,17 +297,39 @@ mod tests {
 
     #[test]
     fn a_long_first_sentence_starts_sooner() {
-        let long = "Claude Code's plan adds a per-key limit of 100 requests a minute, so one noisy key can't slow the API for everyone.";
+        let long = "Claude Code's plan adds a per-key limit of 100 requests a minute; one noisy key can no longer slow the API for everyone.";
         assert_eq!(
             first_chunks(long),
             [
-                "Claude Code's plan adds a per-key limit of 100 requests a minute,",
-                "so one noisy key can't slow the API for everyone."
+                "Claude Code's plan adds a per-key limit of 100 requests a minute;",
+                "one noisy key can no longer slow the API for everyone."
             ]
         );
-        // Short sentences, and ones whose first comma comes too early, stay whole.
+        // Short sentences and dependent continuations stay whole.
         assert_eq!(first_chunks("Keeping Redis."), ["Keeping Redis."]);
-        let early = "First, where the counters live: Redis like the plan says, or in memory, which is simpler.";
-        assert_eq!(first_chunks(early), [early]);
+        let continuation = "The plan keeps Redis for shared counters, but it adds another service for the team to deploy and monitor.";
+        assert_eq!(first_chunks(continuation), [continuation]);
+        let version = "The plan upgrades the public API to v2.10.3 while every existing client remains on the supported version.";
+        assert_eq!(first_chunks(version), [version]);
+    }
+
+    #[test]
+    fn chunking_prefers_complete_semantic_boundaries() {
+        let two_sentences = "The plan keeps Redis for counters. The second sentence explains why every instance must share them.";
+        assert_eq!(
+            first_chunks(two_sentences),
+            [
+                "The plan keeps Redis for counters.",
+                "The second sentence explains why every instance must share them."
+            ]
+        );
+        let colon = "There are two realistic choices for the shared counter store: keep Redis as planned or use memory for one instance.";
+        assert_eq!(
+            first_chunks(colon),
+            [
+                "There are two realistic choices for the shared counter store:",
+                "keep Redis as planned or use memory for one instance."
+            ]
+        );
     }
 }

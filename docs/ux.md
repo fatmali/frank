@@ -382,18 +382,22 @@ counter storage, in memory. Want me to copy the note for Claude Code?"
   never leaves the machine and is never saved. Only the words go to the
   brain, like typing them would.
 - **Fast.** Whisper runs on the GPU, with its audio window sized to the clip.
-  Frank's voice is loaded when the panel opens; a long first sentence is made
-  in two, so the first sound comes sooner; each sentence is made while the
-  one before it plays.
+  Frank's voice is loaded when the panel opens; a long first sentence can
+  split at a complete thought, so the first sound comes sooner; each sentence
+  is made while the one before it plays.
 
 ### 6.4 His voice
 
 Frank speaks with natural voices (Kokoro-82M, on this Mac): Michael (his
 own), Heart, George, Emma, Fenrir, Bella. The voice button next to the
 microphone, or `V`, opens them in the panel: voice or chat, then each voice
-with Listen; choosing one says a line in it. The same picker is in
-Settings. There are no macOS voices: until his voice is downloaded, Frank
-shows text, and the voice bar says so with a Download button.
+with Listen; choosing one says a line in it. A Speaking speed slider runs
+from 85% to 120% of that voice's tuned pace; 100% is roughly 15–20% faster
+than the old shared default. Coding notation is normalized only for speech,
+so API, JSON, OAuth 2.0, C++, versions, ports and identifiers sound natural
+while the original text stays on screen. The same picker is in Settings.
+There are no macOS voices: until his voice is downloaded, Frank shows text,
+and the voice bar says so with a Download button.
 
 ### 6.5 What it looks like
 

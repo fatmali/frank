@@ -19,16 +19,68 @@ pub const SILVER_FILE: &str = "us_silver.json";
 const MAX_TOKENS: usize = 510;
 const STYLE: usize = 256;
 
-/// The voices Frank offers: (Kokoro id, name, description).
-pub const VOICES: &[(&str, &str, &str)] = &[
-    ("am_michael", "Michael", "American, calm"),
-    ("af_heart", "Heart", "American, warm"),
-    ("bm_george", "George", "British, dry"),
-    ("bf_emma", "Emma", "British, clear"),
-    ("am_fenrir", "Fenrir", "American, deep"),
-    ("af_bella", "Bella", "American, bright"),
+pub struct VoiceProfile {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub description: &'static str,
+    /// Kokoro's model speed at the user's 100% setting.
+    pub base_speed: f32,
+}
+
+/// Each voice is tuned separately; the old shared speed of 1.0 was too slow.
+pub const VOICES: &[VoiceProfile] = &[
+    VoiceProfile {
+        id: "am_michael",
+        name: "Michael",
+        description: "American, calm",
+        base_speed: 1.26,
+    },
+    VoiceProfile {
+        id: "af_heart",
+        name: "Heart",
+        description: "American, warm",
+        base_speed: 1.25,
+    },
+    VoiceProfile {
+        id: "bm_george",
+        name: "George",
+        description: "British, dry",
+        base_speed: 1.26,
+    },
+    VoiceProfile {
+        id: "bf_emma",
+        name: "Emma",
+        description: "British, clear",
+        base_speed: 1.25,
+    },
+    VoiceProfile {
+        id: "am_fenrir",
+        name: "Fenrir",
+        description: "American, deep",
+        base_speed: 1.27,
+    },
+    VoiceProfile {
+        id: "af_bella",
+        name: "Bella",
+        description: "American, bright",
+        base_speed: 1.25,
+    },
 ];
 pub const DEFAULT_VOICE: &str = "am_michael";
+const MIN_MODEL_SPEED: f32 = 0.85;
+const MAX_MODEL_SPEED: f32 = 1.50;
+
+pub fn profile(id: &str) -> &'static VoiceProfile {
+    VOICES
+        .iter()
+        .find(|voice| voice.id == id)
+        .unwrap_or(&VOICES[0])
+}
+
+pub fn effective_speed(id: &str, pace_percent: u16) -> f32 {
+    (profile(id).base_speed * f32::from(pace_percent) / 100.0)
+        .clamp(MIN_MODEL_SPEED, MAX_MODEL_SPEED)
+}
 
 pub struct Kokoro {
     session: Mutex<ort::session::Session>,
@@ -277,6 +329,21 @@ mod tests {
     }
 
     #[test]
+    fn every_voice_has_a_faster_tuned_default() {
+        for voice in VOICES {
+            assert!(
+                (1.25..=1.27).contains(&voice.base_speed),
+                "{} has an unexpected base speed",
+                voice.id
+            );
+        }
+        assert!((effective_speed(DEFAULT_VOICE, 100) - 1.26).abs() < 0.001);
+        assert!(effective_speed(DEFAULT_VOICE, 85) < effective_speed(DEFAULT_VOICE, 100));
+        assert!(effective_speed(DEFAULT_VOICE, 120) > effective_speed(DEFAULT_VOICE, 100));
+        assert_eq!(effective_speed(DEFAULT_VOICE, u16::MAX), MAX_MODEL_SPEED);
+    }
+
+    #[test]
     fn reads_npy_arrays() {
         let header = "{'descr': '<f4', 'fortran_order': False, 'shape': (2,), }";
         let mut npy = b"\x93NUMPY\x01\x00".to_vec();
@@ -298,23 +365,31 @@ mod tests {
         let started = std::time::Instant::now();
         let kokoro = Kokoro::load(&dir).expect("voice pack loads");
         eprintln!("loaded in {} ms", started.elapsed().as_millis());
-        for (voice, _, _) in VOICES.iter().take(2) {
+        let sentence = "The API uses OAuth 2.0, PostgreSQL, and HTTP/2 on localhost:3000.";
+        let mut ratios = Vec::new();
+        for voice in VOICES {
             let started = std::time::Instant::now();
-            let audio = kokoro
-                .speak(
-                    "The plan adds Redis. You run one instance, so you don't need it yet.",
-                    voice,
-                    1.0,
-                )
-                .unwrap();
+            let baseline = kokoro.speak(sentence, voice.id, 1.0).unwrap();
+            let audio = kokoro.speak(sentence, voice.id, voice.base_speed).unwrap();
+            let baseline_seconds = baseline.len() as f32 / SAMPLE_RATE as f32;
             let seconds = audio.len() as f32 / SAMPLE_RATE as f32;
+            let duration_ratio = seconds / baseline_seconds;
             eprintln!(
-                "{voice}: {seconds:.1} s of speech in {} ms",
+                "{}: {seconds:.1} s, {:.0}% of the old duration, generated in {} ms",
+                voice.id,
+                duration_ratio * 100.0,
                 started.elapsed().as_millis()
             );
             assert!(seconds > 2.0 && seconds < 10.0, "{seconds}");
-            write_wav(&dir.join(format!("test-{voice}.wav")), &audio);
+            ratios.push((voice.id, duration_ratio));
+            write_wav(&dir.join(format!("test-{}.wav", voice.id)), &audio);
         }
+        assert!(
+            ratios
+                .iter()
+                .all(|(_, ratio)| (0.78..=0.87).contains(ratio)),
+            "duration ratios: {ratios:?}"
+        );
     }
 
     fn write_wav(path: &Path, samples: &[f32]) {

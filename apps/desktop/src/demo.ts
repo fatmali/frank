@@ -264,7 +264,7 @@ export function demoHost(
     sticky: { enabled: false },
     plans: { window_minutes: 30 },
     context: { max_file_kb: 200, trusted_projects: [] },
-    voice: { mode: opts.mode ?? 'voice' },
+    voice: { mode: opts.mode ?? 'voice', pace_percent: 100 },
   };
   const voiceHandlers: ((e: VoiceEvent) => void)[] = [];
   const voice = (e: VoiceEvent) => voiceHandlers.forEach((h) => h(e));

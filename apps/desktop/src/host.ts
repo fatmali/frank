@@ -31,9 +31,15 @@ export interface Config {
   /**
    * `mode`: voice (Frank talks you through plans, the default) or chat.
    * Empty in older configs: see `voiceMode`. `name`: `natural:<id>`; empty
-   * is Frank's own voice.
+   * is Frank's own voice. `pace_percent` is relative to that voice's tuned
+   * baseline; 100 is the default.
    */
-  voice: { mode?: VoiceMode | ''; talk_back?: TalkBack; name?: string };
+  voice: {
+    mode?: VoiceMode | '';
+    talk_back?: TalkBack;
+    name?: string;
+    pace_percent?: number;
+  };
 }
 
 /** A voice Frank can speak with. They run on this Mac once the voice pack is downloaded. */

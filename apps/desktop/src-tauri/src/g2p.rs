@@ -1,57 +1,17 @@
 //! Text to phonemes for Kokoro, Frank's natural voice.
 //!
-//! Words are looked up in misaki's American English dictionaries (Apache
-//! 2.0; about 180,000 words, already in Kokoro's phoneme alphabet). Words
-//! they don't know are handled in order: developer vocabulary Frank knows,
-//! acronyms spelled out, compounds split into known parts, known words with
-//! a suffix, and finally letter by letter. No GPL phonemizer is involved.
+//! Code notation is verbalized first, then words are looked up in misaki's
+//! American English dictionaries (Apache 2.0; about 180,000 words, already in
+//! Kokoro's phoneme alphabet). Unknown words are handled as acronyms,
+//! compounds, suffixed words, or finally letter by letter. No GPL phonemizer
+//! is involved.
 
+use crate::developer_lexicon::{Pronunciation, find as developer_pronunciation};
 use std::collections::HashMap;
 
 pub struct Lexicon {
     words: HashMap<String, String>,
 }
-
-/// Words developers say that the dictionaries don't have, in Kokoro's
-/// alphabet (A = "ay", I = "eye", O = "oh", W = "ow", Y = "oy").
-const DEV_WORDS: &[(&str, &str)] = &[
-    ("redis", "ɹˈɛdɪs"),
-    ("postgres", "pˈOstɡɹɛs"),
-    ("kubernetes", "kˌubəɹnˈɛtiz"),
-    ("json", "ʤˈAsᵊn"),
-    ("yaml", "jˈæmᵊl"),
-    ("toml", "tˈɑmᵊl"),
-    ("sql", "sˈikwᵊl"),
-    ("npm", "ˌɛnpˌiˈɛm"),
-    ("pnpm", "pˌiˌɛnpˌiˈɛm"),
-    ("repo", "ɹˈipO"),
-    ("repos", "ɹˈipOz"),
-    ("config", "kˈɑnfɪɡ"),
-    ("async", "ˈAsɪŋk"),
-    ("oauth", "ˈOˌɔθ"),
-    ("jwt", "ʤˌAdˌʌbᵊljuˈti"),
-    ("github", "ɡˈɪthʌb"),
-    ("nginx", "ˈɛnʤɪnˈɛks"),
-    ("graphql", "ɡɹˈæfkjuˈɛl"),
-    ("webhook", "wˈɛbhʊk"),
-    ("webhooks", "wˈɛbhʊks"),
-    ("middleware", "mˈɪdᵊlwɛɹ"),
-    ("localhost", "lˈOkᵊlhˌOst"),
-    ("frontend", "fɹˈʌntˌɛnd"),
-    ("backend", "bˈækˌɛnd"),
-    ("namespace", "nˈAmspˌAs"),
-    ("dev", "dˈɛv"),
-    ("devs", "dˈɛvz"),
-    ("env", "ˈɛnv"),
-    ("todo", "tˈudu"),
-    ("rust", "ɹˈʌst"),
-    ("tauri", "tˈWɹi"),
-    ("kafka", "kˈɑfkə"),
-    ("vite", "vˈit"),
-    ("vitest", "vˈitɛst"),
-    ("typescript", "tˈIpskɹɪpt"),
-    ("javascript", "ʤˈɑvəskɹɪpt"),
-];
 
 /// Letter names, for acronyms and spelling out.
 fn letter(c: char) -> Option<&'static str> {
@@ -108,10 +68,7 @@ impl Lexicon {
         Ok(Self::from_map(words))
     }
 
-    pub fn from_map(mut words: HashMap<String, String>) -> Self {
-        for (w, p) in DEV_WORDS {
-            words.insert((*w).to_owned(), (*p).to_owned());
-        }
+    pub fn from_map(words: HashMap<String, String>) -> Self {
         Self { words }
     }
 
@@ -119,7 +76,7 @@ impl Lexicon {
     /// punctuation kept for its pauses.
     pub fn phonemes(&self, text: &str) -> String {
         let mut out = String::new();
-        for token in tokenize(&normalize(text)) {
+        for token in tokenize(&crate::verbalize::text(text)) {
             match token {
                 Token::Punct(p) => out.push(p),
                 Token::Word(w) => {
@@ -147,12 +104,22 @@ impl Lexicon {
     }
 
     fn word(&self, w: &str) -> String {
+        if let Some(pronunciation) = developer_pronunciation(w) {
+            return match pronunciation {
+                Pronunciation::Phonemes(phonemes) => phonemes.to_owned(),
+                Pronunciation::Alias(alias) => alias
+                    .split_whitespace()
+                    .map(|part| self.word(part))
+                    .collect::<Vec<_>>()
+                    .join(" "),
+                Pronunciation::Initialism => spell(w),
+            };
+        }
+        if w.len() == 1 && w.chars().all(|c| c.is_ascii_uppercase()) {
+            return spell(w);
+        }
         if let Some(p) = self.lookup(w) {
-            // A dictionary entry for a short all-caps word may be the word
-            // ("IT"), but acronyms of letters read better spelled.
-            if !(is_acronym(w) && w.len() <= 4 && !self.words.contains_key(w)) {
-                return p.to_owned();
-            }
+            return p.to_owned();
         }
         if is_acronym(w) {
             return spell(w);
@@ -273,106 +240,8 @@ fn tokenize(text: &str) -> Vec<Token> {
     tokens
 }
 
-/// Symbols and numbers as words.
-fn normalize(text: &str) -> String {
-    let text = text
-        .replace('&', " and ")
-        .replace('%', " percent ")
-        .replace('+', " plus ")
-        .replace('=', " equals ")
-        .replace("e.g.", "for example")
-        .replace("i.e.", "that is")
-        .replace("vs.", "versus");
-    let mut out = String::with_capacity(text.len());
-    let mut digits = String::new();
-    for c in text.chars().chain(std::iter::once(' ')) {
-        if c.is_ascii_digit() {
-            digits.push(c);
-            continue;
-        }
-        if !digits.is_empty() {
-            match digits.parse::<u64>() {
-                Ok(n) if digits.len() <= 9 => out.push_str(&number_words(n)),
-                _ => out.push_str(&digits.chars().map(digit_word).collect::<Vec<_>>().join(" ")),
-            }
-            digits.clear();
-        }
-        out.push(c);
-    }
-    out.trim_end().to_owned()
-}
-
-fn digit_word(d: char) -> &'static str {
-    [
-        "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
-    ][d.to_digit(10).unwrap_or(0) as usize]
-}
-
-/// 0 to 999,999,999 in words.
-pub fn number_words(n: u64) -> String {
-    const ONES: [&str; 20] = [
-        "zero",
-        "one",
-        "two",
-        "three",
-        "four",
-        "five",
-        "six",
-        "seven",
-        "eight",
-        "nine",
-        "ten",
-        "eleven",
-        "twelve",
-        "thirteen",
-        "fourteen",
-        "fifteen",
-        "sixteen",
-        "seventeen",
-        "eighteen",
-        "nineteen",
-    ];
-    const TENS: [&str; 10] = [
-        "", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety",
-    ];
-    fn below_thousand(n: u64) -> String {
-        let mut parts = Vec::new();
-        if n >= 100 {
-            parts.push(format!("{} hundred", ONES[(n / 100) as usize]));
-        }
-        let rest = n % 100;
-        if rest > 0 || n == 0 {
-            parts.push(if rest < 20 {
-                ONES[rest as usize].to_owned()
-            } else if rest.is_multiple_of(10) {
-                TENS[(rest / 10) as usize].to_owned()
-            } else {
-                format!(
-                    "{} {}",
-                    TENS[(rest / 10) as usize],
-                    ONES[(rest % 10) as usize]
-                )
-            });
-        }
-        parts.join(" ")
-    }
-    if n < 1000 {
-        return below_thousand(n);
-    }
-    let mut parts = Vec::new();
-    for (scale, name) in [(1_000_000, "million"), (1_000, "thousand")] {
-        if !(n / scale).is_multiple_of(1000) {
-            parts.push(format!("{} {name}", below_thousand(n / scale % 1000)));
-        }
-    }
-    if !n.is_multiple_of(1000) {
-        parts.push(below_thousand(n % 1000));
-    }
-    parts.join(" ")
-}
-
 fn is_acronym(w: &str) -> bool {
-    w.len() >= 2 && w.len() <= 6 && w.chars().all(|c| c.is_ascii_uppercase())
+    w.len() >= 2 && w.len() <= 10 && w.chars().all(|c| c.is_ascii_uppercase())
 }
 
 fn spell(w: &str) -> String {
@@ -455,15 +324,14 @@ mod tests {
 
     #[test]
     fn says_numbers_as_words() {
-        assert_eq!(number_words(100), "one hundred");
-        assert_eq!(number_words(42), "forty two");
-        assert_eq!(number_words(3_000_017), "three million seventeen");
         assert_eq!(lexicon().phonemes("100"), "wˈʌn hˈʌndɹəd");
     }
 
     #[test]
     fn spells_acronyms() {
         assert_eq!(lexicon().phonemes("API"), "ˈA pˈi ˈI");
+        assert_eq!(lexicon().phonemes("JSON"), "ʤˈAsᵊn");
+        assert_eq!(lexicon().phonemes("REST"), "ɹˈɛst");
     }
 
     #[test]

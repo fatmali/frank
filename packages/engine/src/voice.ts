@@ -102,11 +102,11 @@ export function callIntro(call: Call): Line[] {
   const [plan, ...others] = call.options;
   if (plan) {
     lines.push({
-      text: `The plan goes with ${phrase(plan.label)}${trade(plan)}.`,
+      text: `The plan picks ${phrase(plan.label)}${trade(plan)}.`,
       about,
     });
     for (const o of others)
-      lines.push({ text: `Or ${phrase(o.label)}${trade(o)}.`, about });
+      lines.push({ text: `Another option is ${phrase(o.label)}${trade(o)}.`, about });
   } else if (call.stakes) {
     lines.push({ text: sentence(call.stakes), about });
   }
