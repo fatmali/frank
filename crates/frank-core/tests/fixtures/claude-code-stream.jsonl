@@ -1,0 +1,15 @@
+{"type":"active_goal","session_id":"00000000-0000-0000-0000-000000000000"}
+{"type":"autocompact_state","session_id":"00000000-0000-0000-0000-000000000000"}
+{"type":"system","subtype":"commands_changed","session_id":"00000000-0000-0000-0000-000000000000"}
+{"type":"system","subtype":"init","session_id":"00000000-0000-0000-0000-000000000000"}
+{"type":"system","subtype":"status","session_id":"00000000-0000-0000-0000-000000000000"}
+{"type":"stream_event","event":{"type":"message_start","message":{"model":"claude-sonnet-5-5","id":"msg_011CfWz28MueJ4he3pTVMvvJ","type":"message","role":"assistant","content":[],"container":null,"stop_reason":null,"stop_sequence":null,"stop_details":null,"usage":{"input_tokens":2,"cache_creation_input_tokens":1148,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":1148},"output_tokens":5,"service_tier":"standard","inference_geo":"not_available"},"input_transformations":[],"diagnostics":null,"context_management":null}},"session_id":"00000000-0000-0000-0000-000000000000"}
+{"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}},"session_id":"00000000-0000-0000-0000-000000000000"}
+{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"quack."}},"session_id":"00000000-0000-0000-0000-000000000000"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"quack."}]},"session_id":"00000000-0000-0000-0000-000000000000"}
+{"type":"stream_event","event":{"type":"content_block_stop","index":0},"session_id":"00000000-0000-0000-0000-000000000000"}
+{"type":"stream_event","event":{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null,"stop_details":null,"container":null},"usage":{"input_tokens":2,"cache_creation_input_tokens":1148,"cache_read_input_tokens":0,"output_tokens":5,"output_tokens_details":{"thinking_tokens":0},"iterations":[{"input_tokens":2,"output_tokens":5,"cache_read_input_tokens":0,"cache_creation_input_tokens":1148,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":1148},"type":"message"}]},"context_management":{"applied_edits":[]}},"session_id":"00000000-0000-0000-0000-000000000000"}
+{"type":"stream_event","event":{"type":"message_stop"},"session_id":"00000000-0000-0000-0000-000000000000"}
+{"type":"rate_limit_event","session_id":"00000000-0000-0000-0000-000000000000"}
+{"type":"system","subtype":"post_turn_summary","session_id":"00000000-0000-0000-0000-000000000000"}
+{"stop_reason":"end_turn","session_id":"00000000-0000-0000-0000-000000000000","is_error":false,"subtype":"success","result":"quack.","type":"result"}

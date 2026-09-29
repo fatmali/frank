@@ -1,0 +1,22 @@
+[package]
+name = "frank-core"
+version = "0.0.0"
+description = "Frank's core: config, finding plans, reading the files they mention, and the brains."
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+async-trait = "0.1"
+dirs = "6"
+regex = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["io-util", "macros", "net", "process", "rt-multi-thread", "sync", "time"] }
+toml = "0.9"
+
+[dev-dependencies]
+tempfile = "3"
