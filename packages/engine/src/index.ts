@@ -12,13 +12,20 @@ export {
   type PartialRead,
 } from './breakdown.ts';
 export { Session, splitSuggestion } from './session.ts';
-export { parseCommand, type Command, type CommandContext } from './commands.ts';
+export {
+  parseCommand,
+  pickByWords,
+  type Command,
+  type CommandContext,
+} from './commands.ts';
 export {
   briefing,
   callIntro,
   leadsTo,
   madeCall,
   wrapUp,
+  walkMeThrough,
+  startWith,
   SPOKEN_CALLS,
   type Line,
   type BriefingInput,

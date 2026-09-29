@@ -132,11 +132,81 @@ const TAKES: Record<string, string> = {
     'Public API only. Limiting /health can make the load balancer think the API is down.\n[option 2]',
 };
 
+/** Older plans on the plans home, each with a read of its own. */
+export function olderPlans(now = Date.now()): Plan[] {
+  const ago = (days: number) => new Date(now - days * 86_400_000).toISOString();
+  return [
+    {
+      source: 'claude-code',
+      title: 'Move sessions to JWT',
+      body: '# Move sessions to JWT\n\n1. Issue JWTs at login\n2. Drop the sessions table in a new migration\n',
+      project: '~/code/sample-api',
+      modifiedAt: ago(2),
+      origin: '~/.claude/plans/brave-quiet-otter.md',
+    },
+    {
+      source: 'claude-code',
+      title: 'Tidy the logger',
+      body: '# Tidy the logger\n\n1. Rename log helpers\n2. Remove unused levels\n',
+      modifiedAt: ago(5),
+      origin: '~/.claude/plans/tidy-green-heron.md',
+    },
+  ];
+}
+
+const JWT_BREAKDOWN = {
+  gist: 'Moves logins from server sessions to JWTs.',
+  goal: 'so the API can scale without sticky sessions',
+  fine: ['the login flow'],
+  calls: [
+    {
+      title: 'Sessions table',
+      question: 'Should the sessions table go now?',
+      kind: 'silent-choice',
+      planQuote: 'Drop the sessions table in a new migration',
+      stakes: 'Clients still logged in with sessions lose them at once.',
+      spoken: 'whether the sessions table goes now, or after clients move',
+      options: [
+        {
+          label: 'Drop it now',
+          gain: 'no dead table',
+          cost: 'logs everyone out',
+          instruction: 'Drop the sessions table in this migration.',
+        },
+        {
+          label: 'Keep it a while',
+          gain: 'nobody logged out',
+          cost: 'a table to remove later',
+          instruction: 'Keep the sessions table until every client uses JWTs.',
+        },
+      ],
+      undoCost: 'hard',
+      contradicted: false,
+      evidence: [],
+    },
+  ],
+};
+
+const LOGGER_BREAKDOWN = {
+  gist: 'Renames the log helpers and removes unused levels.',
+  goal: '',
+  fine: ['nothing outside the logger changes'],
+  calls: [],
+};
+
 /** What the scripted brain says to a request. */
 export function demoReply(request: BrainRequest): string {
   const last = request.messages[request.messages.length - 1]?.content ?? '';
-  if (request.system.includes('Give the developer your read'))
+  if (request.system.includes('Give the developer your read')) {
+    const plan = request.messages[0]?.content ?? '';
+    if (plan.includes('title="Move sessions to JWT"'))
+      return JSON.stringify(JWT_BREAKDOWN);
+    if (plan.includes('title="Tidy the logger"')) return JSON.stringify(LOGGER_BREAKDOWN);
     return JSON.stringify(DEMO_BREAKDOWN);
+  }
+  // Walked through a call: the developer's words may answer what it comes down to.
+  if (/\[answer N\]/.test(last) && /\b(one|single)\b/i.test(last))
+    return "Right, and there's no Redis in docker-compose.yml either, so it's a new service for an instance you don't have.\n[answer 2]";
   if (/^Say ready/m.test(last)) return 'Ready.';
   const take = /What would you do about "([^"]+)"/.exec(last);
   if (take)
@@ -174,7 +244,7 @@ export interface DemoOptions {
 /** A run through the sample plan by voice, one line per turn. */
 export const DEMO_SCRIPT = [
   'the redis one',
-  'no, just one',
+  'so it keeps the counters in redis, so every instance shares a count. we only run one.',
   'yes',
   'what would you do?',
   'take it',
@@ -224,6 +294,7 @@ export function demoHost(
   const announce = () => opts.onNextUtterance?.(utterances[0]);
   announce();
   let levels: ReturnType<typeof setInterval> | undefined;
+  const history = opts.plans ? [] : olderPlans();
   const plans = opts.plans ?? [
     { ...samplePlan(), origin: '~/.claude/plans/jaunty-petting-nebula.md' },
   ];
@@ -305,6 +376,9 @@ export function demoHost(
     async recentPlans() {
       return plans;
     },
+    async planHistory() {
+      return [...plans, ...history];
+    },
     async readPlanFile(path) {
       return { ...samplePlan(), source: 'file', origin: path };
     },
@@ -377,7 +451,8 @@ export function demoHost(
       voice({ type: 'heard', text: utterances.shift() ?? '' });
       announce();
     },
-    async handsFreeStart() {
+    async handsFreeStart(patience) {
+      log(`patience ${patience ?? 'normal'}`);
       if (!hasModel) {
         voice({ type: 'needs-pack', pack: 'listening', megabytes: 150 });
         return;
@@ -387,7 +462,8 @@ export function demoHost(
       log('handsFreeStart');
       listenFreely();
     },
-    async handsFreeResume() {
+    async handsFreeResume(patience) {
+      log(`patience ${patience ?? 'normal'}`);
       if (!handsFree) return;
       log('handsFreeResume');
       listenFreely();

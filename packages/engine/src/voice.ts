@@ -27,52 +27,72 @@ export interface BriefingInput {
 /** More than this many calls is too much to hold in your head by ear. */
 export const SPOKEN_CALLS = 3;
 
-const ORDINALS = ['First', 'Second', 'Third'];
 const COUNTS = ['no', 'one', 'two', 'three', 'four', 'five'];
 
 /**
- * The briefing: what the plan does and why, what Frank found fine, each call
- * in a line, and which one to talk through. Call it again as the read
- * streams in: lines are only ever added, never changed, so the ones already
- * said stay true.
+ * The briefing: what the plan does and why, the calls that need you by
+ * name, and where to start (the one hardest to undo). Call it again as the
+ * read streams in: lines are only ever added, never changed, so the ones
+ * already said stay true. What's fine stays on screen.
  */
 export function briefing(read: BriefingInput, done: boolean): Line[] {
   const lines: Line[] = [];
   const { calls } = read;
   // The plan sentence waits for the goal, which completes it.
   const planReady = read.goal || read.fine !== undefined || calls.length > 0 || done;
-  // What Frank found fine stays on screen: by ear, only what needs you.
   if (planReady) lines.push({ text: planSentence(read), about: 'plan' });
-  calls.slice(0, SPOKEN_CALLS).forEach((call, i) => {
-    const said = call.spoken
-      ? `${ORDINALS[i]}, ${lowerFirst(sentence(call.spoken))}`
-      : `${ORDINALS[i]}: ${sentence(call.question)}`;
-    const text = i === 0 ? `Here's what needs you. ${said}` : said;
-    lines.push({ text, about: `call:${call.id}` });
-  });
   if (!done) return lines;
 
-  const more = calls.length - SPOKEN_CALLS;
-  if (more > 0) {
-    lines.push({
-      text: `And ${COUNTS[more] ?? more} smaller ${more === 1 ? 'one' : 'ones'}, on screen.`,
-      about: 'more',
-    });
-  }
   if (calls.length === 0) {
     lines.push({ text: 'Nothing in it needs you. Ship it.', about: 'ask' });
-  } else if (calls.length === 1) {
-    lines.push({ text: 'Want to talk it through?', about: 'ask' });
-  } else {
-    lines.push({
-      text: 'Which one do you want to talk through? Or say go to take them in order.',
-      about: 'ask',
-    });
+    return lines;
   }
+  const named = calls.slice(0, SPOKEN_CALLS).map((c) => phrase(c.title));
+  const more = calls.length - SPOKEN_CALLS;
+  if (more > 0)
+    named.push(`${COUNTS[more] ?? more} smaller ${more === 1 ? 'one' : 'ones'}`);
+  const need =
+    calls.length === 1
+      ? `One thing in it needs you: ${named[0]}.`
+      : `${upperFirst(count(calls.length))} things in it need you: ${list(named)}.`;
+  lines.push({ text: need, about: 'calls' });
+
+  const start = startWith(calls);
+  const ask =
+    calls.length === 1
+      ? 'Want to walk me through it?'
+      : start.undoCost === 'hard'
+        ? `${upperFirst(phrase(start.title))} is the hardest to undo. Where should we start?`
+        : 'Where should we start?';
+  lines.push({ text: ask, about: `call:${start.id}` });
   return lines;
 }
 
-/** Frank opening a call: the question, what each option buys and costs, and what decides it. */
+/** Where to start: the first call that's hard to undo, else the first. */
+export function startWith(calls: Call[]): Call {
+  return (
+    calls.find((c) => c.undoCost === 'hard' && !c.outcome) ??
+    calls.find((c) => !c.outcome) ??
+    calls[0]!
+  );
+}
+
+/**
+ * Opening a call, rubber-duck style: Frank hands it to you to explain. The
+ * plan's own words for it are on screen.
+ */
+export function walkMeThrough(call: Call): Line[] {
+  const about = `call:${call.id}`;
+  const text = call.planQuote
+    ? "Walk me through this bit. What's the plan doing here?"
+    : `Walk me through ${phrase(call.title)}. What's the plan doing there?`;
+  return [{ text, about }];
+}
+
+/**
+ * Frank explaining a call himself, when asked ("you explain it"): the
+ * question, what each option buys and costs, and what decides it.
+ */
 export function callIntro(call: Call): Line[] {
   const about = `call:${call.id}`;
   const lines: Line[] = [{ text: sentence(call.question), about }];
@@ -170,6 +190,11 @@ function changeName(call: Call): string {
 
 function label(call: Call, option: number): string {
   return call.options[option - 1]?.label ?? call.planChoice;
+}
+
+function list(items: string[]): string {
+  if (items.length <= 1) return items.join('');
+  return `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
 }
 
 function count(n: number): string {

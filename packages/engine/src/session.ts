@@ -20,6 +20,11 @@ export class Session {
   readonly answers: Record<string, number> = {};
   /** The option Frank pointed at in his last reply on a call, if any. */
   suggestion: { callId: string; option: number } | undefined;
+  /**
+   * What the developer's own words answered, as Frank heard it in his last
+   * reply: the call and the answer (0-based) to what it comes down to.
+   */
+  heardAnswer: { callId: string; answer: number } | undefined;
 
   constructor(
     private readonly brain: Brain,
@@ -58,14 +63,19 @@ export class Session {
     signal?: AbortSignal,
     opts: { spoken?: boolean } = {},
   ): AsyncIterable<string> {
-    const request = opts.spoken ? `${text}\n\n${SPOKEN}` : text;
+    const call = this.selected
+      ? this.calls.find((c) => c.id === this.selected)
+      : undefined;
+    const listen =
+      call?.hinge && this.answers[call.id] === undefined ? `\n\n${listenFor(call)}` : '';
+    const request = `${text}${opts.spoken ? `\n\n${SPOKEN}` : ''}${listen}`;
     return this.turn(request, this.selected, signal, { shown: text });
   }
 
   /** "What would you do?" for the selected call. */
   whatWouldYouDo(
     signal?: AbortSignal,
-    opts: { spoken?: boolean } = {},
+    opts: { spoken?: boolean; unsure?: boolean } = {},
   ): AsyncIterable<string> {
     const call = this.selected ? this.call(this.selected) : undefined;
     const answered = call ? this.answers[call.id] : undefined;
@@ -73,8 +83,12 @@ export class Session {
       call?.hinge && answered !== undefined
         ? ` I said "${call.hinge.answers[answered]?.answer}" to "${call.hinge.question}".`
         : '';
+    const unsure =
+      call?.hinge && opts.unsure
+        ? ` I don't know the answer to "${call.hinge.question}". Recommend the option that is easiest to change later.`
+        : '';
     const text = call
-      ? `What would you do about "${call.question}"?${known} In at most three short sentences: name the option first, then the reason, then what would change your answer.`
+      ? `What would you do about "${call.question}"?${known}${unsure} In at most three short sentences: name the option first, then the reason, then what would change your answer.`
       : 'What would you do? Give me a clear recommendation, the reason, and what would change your answer.';
     const request = opts.spoken ? `${text}\n\n${SPOKEN}` : text;
     return this.turn(request, this.selected, signal, { shown: 'What would you do?' });
@@ -175,12 +189,16 @@ export class Session {
         yield chunk;
       }
     } finally {
-      const { text: said, option } = splitSuggestion(reply);
+      const { text: said, option, answer } = splitSuggestion(reply);
       if (said) this.turns.push(withCall({ role: 'frank', text: said }, callId));
       const call = callId ? this.calls.find((c) => c.id === callId) : undefined;
       if (call && option && option <= call.options.length) {
         this.suggestion = { callId: call.id, option };
       }
+      this.heardAnswer =
+        call?.hinge && answer && answer <= call.hinge.answers.length
+          ? { callId: call.id, answer: answer - 1 }
+          : undefined;
     }
   }
 
@@ -196,15 +214,39 @@ function withCall(turn: Turn, callId: string | undefined): Turn {
 }
 
 /**
- * Frank ends a reply with "[option N]" when he recommends an option. Returns
- * the reply without that line, and the option. Safe on partial replies.
+ * Frank ends a reply with "[option N]" when he recommends an option, and
+ * with "[answer N]" when the developer's words answered what the call comes
+ * down to. Returns the reply without those lines, and what they said. Safe
+ * on partial replies.
  */
-export function splitSuggestion(reply: string): { text: string; option?: number } {
-  const m = /\s*\[option\s+(\d)\]\s*$/i.exec(reply);
-  const text = (
-    m
-      ? reply.slice(0, m.index)
-      : reply.replace(/\s*\[(?:o(?:p(?:t(?:i(?:o(?:n[^\]]*)?)?)?)?)?)?$/i, '')
-  ).trim();
-  return m ? { text, option: Number(m[1]) } : { text };
+export function splitSuggestion(reply: string): {
+  text: string;
+  option?: number;
+  answer?: number;
+} {
+  let text = reply;
+  let option: number | undefined;
+  let answer: number | undefined;
+  for (;;) {
+    const m = /\s*\[(option|answer)\s+(\d)\]\s*$/i.exec(text);
+    if (!m) break;
+    if (m[1]!.toLowerCase() === 'option') option ??= Number(m[2]);
+    else answer ??= Number(m[2]);
+    text = text.slice(0, m.index);
+  }
+  // A tag still arriving: "[opt", "[answ".
+  text = text.replace(/\s*\[(?:[oa][a-z]*(?:\s+\d?)?)?$/i, '').trim();
+  return {
+    text,
+    ...(option !== undefined ? { option } : {}),
+    ...(answer !== undefined ? { answer } : {}),
+  };
+}
+
+/** Asks Frank to notice when the developer's words answer the call's deciding question. */
+function listenFor(call: Call): string {
+  const answers = call
+    .hinge!.answers.map((a, i) => `${i + 1} = "${a.answer}"`)
+    .join(', ');
+  return `(If what I said answers "${call.hinge!.question}", end your reply with a line containing only [answer N], where ${answers}.)`;
 }

@@ -10,7 +10,7 @@ use crate::vad::{self, Silero, Turn, Turns};
 use serde::Serialize;
 use std::collections::VecDeque;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -27,6 +27,60 @@ const MIN_SPEECH: Duration = Duration::from_millis(300);
 const LEVEL_EVERY: Duration = Duration::from_millis(50);
 /// Hands-free stops listening after this long with nobody talking.
 const HANDS_FREE_IDLE: Duration = Duration::from_secs(45);
+/// After "hold on", nobody talking is expected: wait much longer.
+const HOLD_IDLE: Duration = Duration::from_secs(5 * 60);
+
+/// How long Frank waits through a quiet before your turn is over, set by
+/// what he just asked (docs/ux.md §6.3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Patience {
+    /// A yes or no.
+    Short = 0,
+    Normal = 1,
+    /// Walking him through part of a plan: thinking pauses are expected.
+    Long = 2,
+    /// "Hold on": wait as long as it takes.
+    Hold = 3,
+}
+
+impl Patience {
+    pub fn parse(s: Option<&str>) -> Self {
+        match s {
+            Some("short") => Self::Short,
+            Some("long") => Self::Long,
+            Some("hold") => Self::Hold,
+            _ => Self::Normal,
+        }
+    }
+
+    fn from_u8(n: u8) -> Self {
+        match n {
+            0 => Self::Short,
+            2 => Self::Long,
+            3 => Self::Hold,
+            _ => Self::Normal,
+        }
+    }
+
+    /// Quiet before checking whether you sound finished, and quiet that
+    /// ends the turn whatever you said.
+    fn timing(self) -> (u32, u32) {
+        match self {
+            Self::Short => (500, 1_200),
+            Self::Normal => (vad::PAUSE_MS, vad::END_MS),
+            Self::Long | Self::Hold => (1_500, 3_000),
+        }
+    }
+
+    /// Nobody talking for this long turns listening off.
+    fn idle(self) -> Duration {
+        if self == Self::Hold {
+            HOLD_IDLE
+        } else {
+            HANDS_FREE_IDLE
+        }
+    }
+}
 /// Speech kept from just before a turn starts, so first words aren't clipped.
 const PRE_ROLL_CHUNKS: usize = 10;
 
@@ -97,6 +151,7 @@ struct HandsFree {
     /// While Frank answers, what the microphone hears is ignored, so he
     /// never mistakes his own voice for the developer's.
     paused: Arc<AtomicBool>,
+    patience: Arc<AtomicU8>,
 }
 
 fn whisper_path() -> PathBuf {
@@ -204,21 +259,24 @@ impl Voice {
 
     /// Hands-free: listens until told to stop, turning each thing the
     /// developer says into a "heard" event when they've finished saying it.
-    pub fn hands_free_start(&self, app: &AppHandle) {
+    pub fn hands_free_start(&self, app: &AppHandle, patience: Patience) {
         app.state::<crate::speech::Speech>().stop();
         if !Pack::Listening.installed() {
             return needs_pack(app, Pack::Listening);
         }
         let mut slot = lock(&self.hands_free);
-        if slot.is_some() {
+        if let Some(h) = slot.as_ref() {
+            h.patience.store(patience as u8, Ordering::SeqCst);
             return;
         }
         let (stop_tx, stop_rx) = mpsc::channel();
         let paused = Arc::new(AtomicBool::new(false));
         let flag = paused.clone();
+        let patience = Arc::new(AtomicU8::new(patience as u8));
+        let wait = patience.clone();
         let app2 = app.clone();
         std::thread::spawn(move || {
-            if let Err(message) = hands_free(&app2, &stop_rx, &flag) {
+            if let Err(message) = hands_free(&app2, &stop_rx, &flag, &wait) {
                 emit(&app2, VoiceEvent::Failed { message });
             }
             *lock(&app2.state::<Voice>().hands_free) = None;
@@ -227,17 +285,19 @@ impl Voice {
         *slot = Some(HandsFree {
             stop: stop_tx,
             paused,
+            patience,
         });
         emit(app, VoiceEvent::HandsFree { state: "waiting" });
         self.warm_up(app);
     }
 
     /// Hands-free: Frank has answered; listen for the developer again.
-    pub fn hands_free_resume(&self, app: &AppHandle) {
-        if let Some(h) = lock(&self.hands_free).as_ref()
-            && h.paused.swap(false, Ordering::SeqCst)
-        {
-            emit(app, VoiceEvent::HandsFree { state: "waiting" });
+    pub fn hands_free_resume(&self, app: &AppHandle, patience: Patience) {
+        if let Some(h) = lock(&self.hands_free).as_ref() {
+            h.patience.store(patience as u8, Ordering::SeqCst);
+            if h.paused.swap(false, Ordering::SeqCst) {
+                emit(app, VoiceEvent::HandsFree { state: "waiting" });
+            }
         }
     }
 
@@ -321,6 +381,7 @@ fn hands_free(
     app: &AppHandle,
     stop: &mpsc::Receiver<()>,
     paused: &AtomicBool,
+    patience: &AtomicU8,
 ) -> Result<(), String> {
     let mut ear = Ear::new(Silero::load(&vad_path())?);
     let (tx, rx) = mpsc::channel::<Vec<f32>>();
@@ -356,6 +417,9 @@ fn hands_free(
         if !heard_anything && started.elapsed() > Duration::from_secs(2) {
             return Err(MIC_DENIED.into());
         }
+        let wait = Patience::from_u8(patience.load(Ordering::SeqCst));
+        let (pause_ms, end_ms) = wait.timing();
+        ear.set_timing(pause_ms, end_ms);
         pending.extend(samples);
         while pending.len() >= vad::CHUNK {
             let chunk: Vec<f32> = pending.drain(..vad::CHUNK).collect();
@@ -376,7 +440,7 @@ fn hands_free(
                 }
             }
         }
-        if !ear.talking() && last_speech.elapsed() > HANDS_FREE_IDLE {
+        if !ear.talking() && last_speech.elapsed() > wait.idle() {
             return Ok(());
         }
     }
@@ -420,6 +484,10 @@ impl Ear {
 
     fn talking(&self) -> bool {
         self.turns.talking()
+    }
+
+    fn set_timing(&mut self, pause_ms: u32, end_ms: u32) {
+        self.turns.set_timing(pause_ms, end_ms);
     }
 
     /// Hears one `vad::CHUNK` of 16 kHz audio. When the developer goes
@@ -770,5 +838,22 @@ mod tests {
                 Heard::Said("We could use Redis because".into())
             ]
         );
+    }
+
+    #[test]
+    fn patience_follows_what_frank_asked() {
+        assert_eq!(Patience::parse(Some("short")).timing(), (500, 1_200));
+        assert_eq!(Patience::parse(Some("long")).timing(), (1_500, 3_000));
+        assert_eq!(Patience::parse(None), Patience::Normal);
+        assert_eq!(Patience::parse(Some("nonsense")), Patience::Normal);
+        assert_eq!(Patience::Hold.idle(), HOLD_IDLE);
+        for p in [
+            Patience::Short,
+            Patience::Normal,
+            Patience::Long,
+            Patience::Hold,
+        ] {
+            assert_eq!(Patience::from_u8(p as u8), p);
+        }
     }
 }

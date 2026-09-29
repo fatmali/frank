@@ -101,6 +101,8 @@ export const Composer = forwardRef<ComposerHandle>(function Composer(_, ref) {
     voiceMenuOpen,
     packs,
     typing,
+    turnKind,
+    history,
   } = usePanel();
   const [text, setText] = useState('');
   const input = useRef<HTMLTextAreaElement>(null);
@@ -184,7 +186,12 @@ export const Composer = forwardRef<ComposerHandle>(function Composer(_, ref) {
       </div>
     );
   }
-  const inSession = view.name === 'read' || view.name === 'call' || view.name === 'calls';
+  const onHome = view.name === 'plans';
+  const inSession =
+    view.name === 'read' ||
+    view.name === 'call' ||
+    view.name === 'calls' ||
+    (onHome && history.length > 0);
   if (c.voiceFirst && inSession && !typing && !changing) {
     const hearing = handsFree && handsFree.state !== 'paused';
     const voiceDownload = downloads.voices;
@@ -196,9 +203,15 @@ export const Composer = forwardRef<ComposerHandle>(function Composer(_, ref) {
           : reading
             ? 'Frank is reading the plan'
             : hearing
-              ? handsFree.state === 'waiting'
-                ? 'Your turn. Just talk.'
-                : 'Hearing you'
+              ? handsFree.state !== 'waiting'
+                ? 'Hearing you'
+                : turnKind === 'hold'
+                  ? 'Take your time.'
+                  : turnKind === 'long'
+                    ? 'Your turn. Take your time; pauses are fine.'
+                    : onHome
+                      ? 'Which plan? Say its name, or pick one.'
+                      : 'Your turn. Just talk.'
               : handsFree
                 ? 'One moment'
                 : 'Tap Space to talk';
@@ -313,7 +326,7 @@ export const Composer = forwardRef<ComposerHandle>(function Composer(_, ref) {
     ? 'What should the agent do instead?'
     : reading
       ? 'Frank is still reading'
-      : view.name === 'no-plan'
+      : view.name === 'plans'
         ? 'Paste a plan here, or drop a file'
         : view.name === 'call'
           ? 'Ask about this. Hold Space to talk, tap it to talk freely'
@@ -359,7 +372,7 @@ export const Composer = forwardRef<ComposerHandle>(function Composer(_, ref) {
             }
           }}
         />
-        {view.name !== 'no-plan' && (
+        {view.name !== 'plans' && (
           <div className="composer-tools">
             <VoiceButton open={voiceMenuOpen} onClick={() => c.toggleVoiceMenu()} />
             <button

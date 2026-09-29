@@ -292,7 +292,7 @@ describe('around the session', () => {
   it('takes a pasted plan when none was found', async () => {
     const c = new PanelController(demoHost({ delay: 0, plans: [] }));
     await c.start();
-    expect(c.getSnapshot().view.name).toBe('no-plan');
+    expect(c.getSnapshot().view.name).toBe('plans');
     await c.send('# Move sessions to JWT\n1. Drop the sessions table');
     const s = c.getSnapshot();
     expect(s.plan!.source).toBe('pasted');
@@ -387,8 +387,9 @@ describe("Frank's voice", () => {
     c.beginCalls();
     c.toggleVoiceMenu();
     expect(c.getSnapshot().voiceMenuOpen).toBe(true);
-    c.togglePicker(true);
+    await c.showPlans();
     expect(c.getSnapshot().voiceMenuOpen).toBe(false);
+    await c.load(c.getSnapshot().history[0]!);
     c.toggleVoiceMenu();
     await c.close();
     expect(c.getSnapshot().voiceMenuOpen).toBe(false);
@@ -404,10 +405,8 @@ describe('voice first', () => {
     const { host, c } = await startSession({ utterances: [] });
     expect(said(host)).toEqual([
       "Claude Code's plan adds a per-key limit of 100 requests a minute to the public API, with counters kept in Redis, so one noisy key can't slow the API down for everyone.",
-      "Here's what needs you. First, where the counters live: Redis like the plan says, or in memory.",
-      'Second, whether the health check is limited: every route like the plan, or just the public API.',
-      'Third, whether two new packages are worth it, or just one.',
-      'Which one do you want to talk through? Or say go to take them in order.',
+      'Three things in it need you: counter storage, limited routes and new dependencies.',
+      'Counter storage is the hardest to undo. Where should we start?',
     ]);
     // His turn is over once he's asked; the microphone opens by itself.
     await settle(c, (x) => x.getSnapshot().handsFree?.state === 'waiting');
@@ -430,7 +429,14 @@ describe('voice first', () => {
 
   it('talks a whole plan through by voice, and copies the note', async () => {
     const { host, c } = await startSession({
-      utterances: ['the redis one', 'no', 'yes', 'keep it', 'keep it', 'yes'],
+      utterances: [
+        'the redis one',
+        'so it keeps counters in redis for more than one instance, but we only run one',
+        'yes',
+        'keep it',
+        'keep it',
+        'yes',
+      ],
     });
     await settle(c, (x) => x.getSnapshot().noteCopied);
     const s = c.getSnapshot();
@@ -441,15 +447,23 @@ describe('voice first', () => {
     ]);
     expect(host.copied[0]).toMatch(/Revise the plan/);
     const lines = said(host);
-    expect(lines).toContain('Where should the counters live?');
+    // Frank hands each call over to be walked through, and your walk-through
+    // answered what the first one comes down to.
+    expect(lines).toContain("Walk me through this bit. What's the plan doing here?");
+    expect(lines).toContain(
+      "Right, and there's no Redis in docker-compose.yml either, so it's a new service for an instance you don't have.",
+    );
     expect(lines).toContain('Then in memory. Go with that?');
     expect(lines).toContain('Going with in memory.');
     expect(lines).toContain(
       "That's all three. You changed one thing: counter storage, in memory. Want me to copy the note for Claude Code?",
     );
     expect(lines.at(-1)).toBe('Note copied. Paste it into Claude Code.');
-    // Only questions go to the brain: the read was the only request.
-    expect(host.calls.filter((x) => x === 'stream')).toHaveLength(1);
+    // The brain heard the read and the walk-through; everything else was on-device.
+    expect(host.calls.filter((x) => x === 'stream')).toHaveLength(2);
+    // Walk-throughs get patience; yes-or-no questions don't.
+    expect(host.calls).toContain('patience long');
+    expect(host.calls).toContain('patience short');
   });
 
   it('the demo script talks the sample through, with a question to the brain', async () => {
@@ -460,8 +474,8 @@ describe('voice first', () => {
       'change',
       'keep',
     ]);
-    // The read, and "what would you do?".
-    expect(host.calls.filter((x) => x === 'stream')).toHaveLength(2);
+    // The read, the walk-through, and "what would you do?".
+    expect(host.calls.filter((x) => x === 'stream')).toHaveLength(3);
   });
 
   it('answers questions out loud, even typed ones', async () => {
@@ -528,3 +542,97 @@ describe('first run', () => {
 function voiceModeOf(c: PanelController) {
   return c.voiceFirst ? 'voice' : 'chat';
 }
+
+describe('the plans home', () => {
+  const said = (host: { calls: string[] }) =>
+    host.calls.filter((x) => x.startsWith('speak ')).map((x) => x.slice(6));
+
+  it('grabs the newest plan you have not talked through, else shows your plans', async () => {
+    const { host, c } = await startSession({ mode: 'chat' });
+    expect(c.getSnapshot().plan?.title).toBe('Add rate limiting to the public API');
+    await c.showPlans();
+    const s = c.getSnapshot();
+    expect(s.view.name).toBe('plans');
+    expect(s.history.map((p) => p.title)).toEqual([
+      'Add rate limiting to the public API',
+      'Move sessions to JWT',
+      'Tidy the logger',
+    ]);
+    // Summoned again with nothing new, Frank stays on the home.
+    await c.start();
+    expect(c.getSnapshot().view.name).toBe('plans');
+    expect(host.calls).toContain('pinned true');
+  });
+
+  it('picks a plan by voice, and comes back to where you left off', async () => {
+    const { host, c } = await startSession({ utterances: [] });
+    c.beginCalls();
+    c.choose(2); // counters in memory; on to the health check
+    expect(c.getSnapshot().selected).toBe('2');
+
+    await c.send('show my plans', true);
+    expect(c.getSnapshot().view.name).toBe('plans');
+    expect(said(host)).toContain('Which plan?');
+    expect(Object.values(c.getSnapshot().visits)[0]).toEqual({
+      made: 1,
+      total: 3,
+      copied: false,
+    });
+
+    await c.send('the JWT one', true);
+    await settle(c, (x) => x.getSnapshot().plan?.title === 'Move sessions to JWT');
+    await settle(c, (x) => x.getSnapshot().view.name === 'read');
+    expect(c.getSnapshot().calls.map((x) => x.title)).toEqual(['Sessions table']);
+
+    await c.showPlans();
+    await c.send('the rate limiting one', true);
+    const back = c.getSnapshot();
+    expect(back.plan?.title).toBe('Add rate limiting to the public API');
+    expect(back.view.name).toBe('call');
+    expect(back.selected).toBe('2');
+    expect(back.calls[0]!.outcome).toMatchObject({ verdict: 'change', option: 2 });
+    expect(said(host)).toContain('Back to Add rate limiting to the public API.');
+    // Nothing was read twice.
+    expect(host.calls.filter((x) => x === 'stream')).toHaveLength(2);
+  });
+});
+
+describe('walking Frank through a call', () => {
+  const said = (host: { calls: string[] }) =>
+    host.calls.filter((x) => x.startsWith('speak ')).map((x) => x.slice(6));
+
+  it('"you explain it" gets his explanation, and what it comes down to', async () => {
+    const { host, c } = await startSession({ utterances: [] });
+    c.beginCalls();
+    await c.send('you explain it', true);
+    expect(said(host)).toContain(
+      'It comes down to: will you run more than one API instance soon?',
+    );
+  });
+
+  it('"hold on" waits as long as it takes, and says nothing', async () => {
+    const { host, c } = await startSession({ utterances: [] });
+    c.beginCalls();
+    await settle(c, (x) => x.getSnapshot().voice.state !== 'speaking');
+    const before = said(host).length;
+    await c.send('hold on', true);
+    expect(said(host)).toHaveLength(before);
+    expect(c.getSnapshot().flash).toBe('Take your time.');
+  });
+
+  it('"I don\'t know" gets the option easiest to change', async () => {
+    const { host, c } = await startSession({ utterances: [] });
+    c.beginCalls();
+    await c.send("I don't know", true);
+    expect(c.getSnapshot().highlight).toEqual({ option: 2, why: 'frank' });
+    expect(host.calls.filter((x) => x === 'stream')).toHaveLength(2);
+  });
+
+  it('"wait, what?" says the last thing again', async () => {
+    const { host, c } = await startSession({ utterances: [] });
+    c.beginCalls();
+    await c.send('wait, what?', true);
+    const lines = said(host);
+    expect(lines.filter((l) => l.startsWith('Walk me through this bit'))).toHaveLength(2);
+  });
+});

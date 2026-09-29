@@ -19,7 +19,17 @@ export type Command =
   | { type: 'start' }
   /** An answer to a yes-or-no question Frank just asked. */
   | { type: 'yes' }
-  | { type: 'no' };
+  | { type: 'no' }
+  /** Back to the plans home. */
+  | { type: 'plans' }
+  /** "You explain it": Frank explains the call himself. */
+  | { type: 'explain' }
+  /** "I don't know" to what a call comes down to. */
+  | { type: 'unsure' }
+  /** "Hold on": Frank waits, as long as it takes. */
+  | { type: 'hold' }
+  /** "Wait, what?": say the last thing again, more simply. */
+  | { type: 'again' };
 
 export interface CommandContext {
   /** Every call, to pick one by voice: "the Redis one", "the second one". */
@@ -106,6 +116,30 @@ export function parseCommand(
   if (/^(copy( the)? note|that's it|thats it|done|all done|we're done|ship it)$/.test(t))
     return { type: 'copy' };
   if (
+    /^((show )?(me )?(my |the |other )?plans|(go )?(back )?(to )?(the )?plans|switch plans?|another plan|different plan)$/.test(
+      t,
+    )
+  )
+    return { type: 'plans' };
+  if (
+    /^(you explain( it| that)?|explain( it| that)?|you tell me|tell me|i haven't read it|i havent read it|no idea what it does)$/.test(
+      t,
+    )
+  )
+    return { type: 'explain' };
+  if (
+    /^(hold on|hang on|let me think|give me a (sec|second|minute|moment)|one (sec|second|moment)|just a (sec|second|moment))$/.test(
+      t,
+    )
+  )
+    return { type: 'hold' };
+  if (
+    /^(wait what|what|sorry|come again|say (that|it) again|again|repeat (that|it)|simpler|say it simpler|i don't follow|i dont follow|i don't get it|i dont get it)$/.test(
+      t,
+    )
+  )
+    return { type: 'again' };
+  if (
     /^(what would you do|what do you think|what's your take|whats your take|your take|what would you pick|which one would you pick|which would you pick)$/.test(
       t,
     )
@@ -168,6 +202,14 @@ export function parseCommand(
     if (partial >= 0) return { type: 'choose', option: partial + 1 };
   }
 
+  if (
+    call.hinge &&
+    /^(i don't know|i dont know|not sure|no idea|dunno|hard to say|i'm not sure|im not sure)$/.test(
+      t,
+    )
+  )
+    return { type: 'unsure' };
+
   // Hinge answers: by their own words, or yes and no.
   const answers = call.hinge?.answers ?? [];
   const exact = answers.findIndex((a) => normalize(a.answer) === t);
@@ -193,6 +235,53 @@ function normalize(s: string): string {
     .replace(/[“”"'.!,?;:]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/**
+ * Which of a list of things a short phrase means ("the second one", "the
+ * last one", "the rate limiting one"), by position or by words. Returns
+ * undefined for a question, or when it could be more than one.
+ */
+export function pickByWords(
+  said: string,
+  items: { id: string; text: string }[],
+): string | undefined {
+  const t = normalizeSaid(said)
+    .replace(
+      /^(?:let's |lets )?(?:talk about|talk through|go to|open|do|take|pick)\s+/,
+      '',
+    )
+    .replace(/^the\s+/, '')
+    .replace(/\s+(?:one|plan|call|thing)$/, '')
+    .trim();
+  const number = /^(?:number|plan|call)?\s*(\w+)$/.exec(t)?.[1];
+  if (number === 'last') return items.at(-1)?.id;
+  if (number && ORDINAL[number]) return items[ORDINAL[number] - 1]?.id;
+  if (!t || QUESTION.test(t) || t.split(' ').length > 6) return undefined;
+  const words = t.split(' ').filter((w) => w.length > 2 && !STOP.has(w));
+  if (!words.length) return undefined;
+  const scores = items.map((item) => {
+    const keys = wordsOf(item.text);
+    return words.filter((w) => keys.some((k) => sameWord(w, k))).length;
+  });
+  const best = Math.max(...scores);
+  if (best === 0 || scores.filter((s) => s === best).length > 1) return undefined;
+  return items[scores.indexOf(best)]!.id;
+}
+
+function normalizeSaid(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[“”"'.!,?;:]+/g, (m) => (m.includes("'") ? "'" : ' '))
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function wordsOf(text: string): string[] {
+  return text
+    .toLowerCase()
+    .split(/[^a-z0-9-]+/)
+    .filter((w) => w.length > 2 && !STOP.has(w));
 }
 
 /**

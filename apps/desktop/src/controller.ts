@@ -12,6 +12,9 @@ import {
   leadsTo,
   madeCall,
   parseCommand,
+  pickByWords,
+  startWith,
+  walkMeThrough,
   runBreakdown,
   splitSuggestion,
   wrapUp,
@@ -31,6 +34,7 @@ import {
   type Host,
   type Pack,
   type PackStatus,
+  type Patience,
   type VoiceEvent,
   voiceMode,
 } from './host.ts';
@@ -39,7 +43,8 @@ import { SAMPLE_FILES, SAMPLE_ORIGIN, samplePlan } from './sample.ts';
 export type View =
   | { name: 'starting' }
   | { name: 'onboarding' }
-  | { name: 'no-plan' }
+  /** The plans home: every plan from the last two weeks, or how to add one. */
+  | { name: 'plans' }
   | { name: 'preparing'; step: string }
   | { name: 'context-check'; gathered: Gathered }
   | { name: 'error'; kind: FailureKind; message: string }
@@ -58,11 +63,34 @@ export type VoiceState =
   /** Asking to download a pack; nothing was recorded. */
   | { state: 'needs-pack'; pack: Pack; megabytes: number };
 
+/** How far a plan got, for the plans home. */
+export interface Visit {
+  made: number;
+  total: number;
+  copied: boolean;
+}
+
+/** A plan's identity: the same file, the same version. */
+export function planKey(plan: Plan): string {
+  return `${plan.origin}@${plan.modifiedAt}`;
+}
+
+interface Kept {
+  session: Session;
+  gathered: Gathered | undefined;
+  gist: string;
+  fine: string[];
+  view: View;
+}
+
 export interface PanelState {
   view: View;
   config: Config | undefined;
   settingsOpen: boolean;
-  pickerOpen: boolean;
+  /** The plans home's list, newest first. */
+  history: Plan[];
+  /** How far each plan got, by plan key. */
+  visits: Record<string, Visit>;
   /** Frank's voice, picked from the panel (the voice button, or V). */
   voiceMenuOpen: boolean;
   plan: Plan | undefined;
@@ -110,6 +138,8 @@ export interface PanelState {
   speakingAbout: string | undefined;
   /** Voice mode: the developer switched the voice bar to a text box. */
   typing: boolean;
+  /** What kind of turn the developer has now, for the voice bar. */
+  turnKind: Patience | undefined;
   /** What went wrong with voice, in words the developer can act on. */
   voiceError: string | undefined;
 }
@@ -137,7 +167,8 @@ export class PanelController {
     view: { name: 'starting' },
     config: undefined,
     settingsOpen: false,
-    pickerOpen: false,
+    history: [],
+    visits: {},
     voiceMenuOpen: false,
     plan: undefined,
     plans: [],
@@ -167,6 +198,7 @@ export class PanelController {
     packs: undefined,
     speakingAbout: undefined,
     typing: false,
+    turnKind: undefined,
     voiceError: undefined,
   };
   private listeners = new Set<() => void>();
@@ -181,9 +213,18 @@ export class PanelController {
   private spoken = false;
   /** Lines of the briefing already said, while it's still being said. */
   private briefed: number | undefined;
-  /** A yes-or-no question Frank asked and is waiting on. */
+  /** What Frank asked and is waiting on. */
   private awaiting:
-    { kind: 'confirm'; callId: string; option: number } | { kind: 'copy' } | undefined;
+    | { kind: 'confirm'; callId: string; option: number }
+    | { kind: 'copy' }
+    | { kind: 'walk'; callId: string }
+    | undefined;
+  /** "Hold on": wait as long as it takes for the next turn. */
+  private holding = false;
+  /** The last lines Frank said from a template, to say again on "wait, what?". */
+  private lastSaid: { text: string; about?: string }[] | undefined;
+  /** Plans talked through this run, to come back to where you left off. */
+  private stash = new Map<string, Kept>();
   /** Said before the next call's intro: "Going with in memory." */
   private prefix: string | undefined;
   /** Voice mode listens after Frank speaks, until the developer turns it off. */
@@ -237,6 +278,17 @@ export class PanelController {
       progress: s.progress,
       ...extra,
     });
+    const plan = this.state.plan;
+    if (plan) {
+      const key = planKey(plan);
+      const was = this.state.visits[key];
+      this.set({
+        visits: {
+          ...this.state.visits,
+          [key]: { ...s.progress, copied: was?.copied ?? false },
+        },
+      });
+    }
   }
 
   get brainName(): string {
@@ -290,6 +342,7 @@ export class PanelController {
     if (!this.voiceFirst || !this.canSpeak) return;
     const said = lines.filter((l) => l.text.trim());
     if (!said.length) return;
+    this.lastSaid = said;
     this.set({ voice: { state: 'speaking' } });
     for (const l of said) void this.host.speak(speakableProse(l.text), l.about);
   }
@@ -319,12 +372,28 @@ export class PanelController {
     this.prefix = undefined;
     if (!call || !this.voiceFirst) return;
     this.hush();
-    this.say([...(prefix ? [{ text: prefix }] : []), ...callIntro(call)]);
+    this.awaiting = { kind: 'walk', callId: id };
+    this.say([...(prefix ? [{ text: prefix }] : []), ...walkMeThrough(call)]);
+  }
+
+  /** "You explain it": Frank explains the call himself, then asks what decides it. */
+  private explainCall(): void {
+    const s = this.session;
+    if (!s || !s.calls.length) return;
+    if (this.state.view.name !== 'call') {
+      this.show(startWith(s.calls).id);
+      this.hush();
+    }
+    const call = this.current;
+    if (!call) return;
+    this.awaiting = undefined;
+    this.say(callIntro(call));
   }
 
   /** In a conversation about a plan: the read, a call, or your calls. */
   private get talking(): boolean {
     const view = this.state.view.name;
+    if (view === 'plans') return this.state.history.length > 0;
     return !!this.session && (view === 'read' || view === 'call' || view === 'calls');
   }
 
@@ -351,25 +420,76 @@ export class PanelController {
       }
       return;
     }
-    if (plans[0]) await this.load(plans[0]);
-    else this.showNoPlan();
+    // Frank grabs the newest plan you haven't talked through; else, the home.
+    const fresh = plans.find((p) => !this.stash.has(planKey(p)));
+    if (fresh) await this.load(fresh);
+    else await this.showPlans(true);
   }
 
-  private showNoPlan(): void {
-    this.set({ view: { name: 'no-plan' } });
-    // Stay open while the developer fetches a plan to drop or paste.
+  /**
+   * The plans home. `ask`: in voice mode, Frank asks which one (on summon,
+   * or when asked for the plans by voice).
+   */
+  async showPlans(ask = false): Promise<void> {
+    this.cancel();
+    this.hush();
+    this.keepCurrent();
+    this.set({
+      view: { name: 'plans' },
+      changing: false,
+      voiceMenuOpen: false,
+      speakingAbout: undefined,
+    });
+    // Stay open while the developer picks, or fetches a plan to drop or paste.
     void this.host.setPinned(true);
     this.setMood('idle');
+    const found = await this.host.planHistory().catch(() => [] as Plan[]);
+    const kept = [...this.stash.values()].map((s) => s.session.context.plan);
+    const current = this.state.plan ? [this.state.plan] : [];
+    const history = uniquePlans([...current, ...kept, ...this.state.plans, ...found]);
+    this.set({ history });
+    if (ask && this.voiceFirst && history.length) {
+      this.say([
+        { text: history.length === 1 ? 'Talk this one through?' : 'Which plan?' },
+      ]);
+    } else if (this.state.voice.state !== 'speaking') {
+      this.yourTurn();
+    }
   }
 
-  /** Starts over on `plan`: reads what it mentions, then gives the read. */
+  /** Keeps the plan on screen, to come back to where you left off. */
+  private keepCurrent(): void {
+    const plan = this.state.plan;
+    const s = this.session;
+    if (!plan || !s) return;
+    const view = this.state.view;
+    const inPlan = view.name === 'read' || view.name === 'call' || view.name === 'calls';
+    // Kept already, and not in it now (on the home): keep where it was left.
+    if (!inPlan && this.stash.has(planKey(plan))) return;
+    this.stash.set(planKey(plan), {
+      session: s,
+      gathered: this.state.gathered,
+      gist: this.state.gist,
+      fine: this.state.fine,
+      view: view.name === 'call' || view.name === 'calls' ? view : { name: 'read' },
+    });
+  }
+
+  /**
+   * Opens `plan`: back where you left off if you've talked it through this
+   * run; otherwise reads what it mentions, then gives the read.
+   */
   async load(plan: Plan): Promise<void> {
     this.cancel();
+    this.hush();
+    const same = this.state.plan && planKey(this.state.plan) === planKey(plan);
+    if (!same) this.keepCurrent();
+    const kept = this.stash.get(planKey(plan));
+    if (kept) return this.resume(plan, kept);
     this.session = undefined;
     this.set({
       plan,
       newerPlan: undefined,
-      pickerOpen: false,
       gathered: undefined,
       gist: '',
       fine: [],
@@ -406,6 +526,38 @@ export class PanelController {
       return;
     }
     await this.find(gathered);
+  }
+
+  private resume(plan: Plan, kept: Kept): void {
+    this.session = kept.session;
+    this.awaiting = undefined;
+    this.prefix = undefined;
+    this.listen = true;
+    this.sync({
+      plan,
+      newerPlan: undefined,
+      gathered: kept.gathered,
+      gist: kept.gist,
+      fine: kept.fine,
+      reading: false,
+      view: kept.view,
+      changing: false,
+      notice: undefined,
+      turnError: undefined,
+      streaming: undefined,
+    });
+    void this.host.setPinned(false);
+    this.setMood(this.restingMood());
+    const s = this.session;
+    const call = this.current;
+    if (this.voiceFirst && kept.view.name === 'call' && s.selected && call) {
+      this.say([{ text: `Back to ${plan.title}.` }, ...walkMeThrough(call)]);
+      this.awaiting = { kind: 'walk', callId: s.selected };
+    } else if (this.voiceFirst) {
+      this.say([{ text: `Back to ${plan.title}. Where were we?` }]);
+    } else {
+      this.yourTurn();
+    }
   }
 
   /** The developer confirmed the files in the context check. */
@@ -549,12 +701,7 @@ export class PanelController {
   }
 
   toggleVoiceMenu(open = !this.state.voiceMenuOpen): void {
-    this.set({ voiceMenuOpen: open, pickerOpen: false });
-  }
-
-  togglePicker(open = !this.state.pickerOpen): void {
-    this.set({ pickerOpen: open, voiceMenuOpen: false });
-    if (open) void this.host.recentPlans().then((plans) => this.set({ plans }));
+    this.set({ voiceMenuOpen: open });
   }
 
   // ------------------------------------------------------------ moving around
@@ -641,7 +788,7 @@ export class PanelController {
   }
 
   /** Answers what the call comes down to; lights up the option it leads to. */
-  answer(index: number): void {
+  answer(index: number, opts: { after?: boolean } = {}): void {
     const s = this.session;
     const call = this.current;
     if (!s || !call?.hinge?.answers[index] || this.state.view.name !== 'call') return;
@@ -650,7 +797,8 @@ export class PanelController {
     if (s.suggestion?.callId === call.id) s.suggestion = undefined;
     this.sync();
     if (this.voiceFirst) {
-      this.hush();
+      // After Frank's reply it follows on; otherwise it replaces what he's saying.
+      if (!opts.after) this.hush();
       this.awaiting = { kind: 'confirm', callId: call.id, option };
       this.say([{ text: leadsTo(call, option), about: `call:${call.id}` }]);
     }
@@ -715,10 +863,9 @@ export class PanelController {
     // In voice mode every answer is heard, typed question or not.
     const heard = spoken || this.voiceFirst;
     this.spoken = heard;
-    if (!this.session) {
-      if (this.state.view.name === 'no-plan') await this.pastePlan(t);
-      return;
-    }
+    this.holding = false;
+    if (this.state.view.name === 'plans') return this.pickPlan(t, spoken);
+    if (!this.session) return;
     if (this.state.changing) return this.changeTo(t);
     const awaiting = this.awaiting;
     this.awaiting = undefined;
@@ -727,7 +874,7 @@ export class PanelController {
       this.state.view.name === 'call' ? this.current : undefined,
       {
         calls: this.session.calls,
-        ...(awaiting ? { expecting: 'yes-no' as const } : {}),
+        ...(yesNo(awaiting) ? { expecting: 'yes-no' as const } : {}),
       },
     );
     if (command && (await this.run(command, awaiting))) return;
@@ -738,6 +885,21 @@ export class PanelController {
     await this.stream((signal) => s.ask(t, signal, { spoken: heard }), s.selected);
   }
 
+  /** On the plans home: a plan by name or position, or a pasted plan. */
+  private async pickPlan(t: string, spoken: boolean): Promise<void> {
+    const command = parseCommand(t);
+    if (command?.type === 'plans') return;
+    const history = this.state.history;
+    const key = pickByWords(
+      t,
+      history.map((p) => ({ id: planKey(p), text: `${p.title} ${p.project ?? ''}` })),
+    );
+    const plan = history.find((p) => planKey(p) === key);
+    if (plan) return this.load(plan);
+    if (!spoken || t.includes('\n') || t.length > 120) return this.pastePlan(t);
+    this.say([{ text: 'Which one? Say its name, or "the first one".' }]);
+  }
+
   /** Runs a command. Returns false when it doesn't apply here. */
   private async run(
     command: Command,
@@ -745,6 +907,41 @@ export class PanelController {
   ): Promise<boolean> {
     const view = this.state.view.name;
     switch (command.type) {
+      case 'plans':
+        await this.showPlans(true);
+        return true;
+      case 'explain':
+        this.explainCall();
+        return true;
+      case 'unsure':
+        if (view !== 'call') return false;
+        await this.whatWouldYouDo(this.spoken, { unsure: true });
+        return true;
+      case 'hold':
+        // A duck waits. Nothing to say.
+        this.holding = true;
+        this.awaiting = awaiting;
+        this.flash('Take your time.');
+        return true;
+      case 'again': {
+        if (this.lastSaid) {
+          this.say(this.lastSaid);
+          this.awaiting = awaiting;
+          return true;
+        }
+        const s = this.session;
+        if (!s) return false;
+        await this.stream(
+          (signal) =>
+            s.ask(
+              "Wait, what? Say that again more simply, with the context I'm missing.",
+              signal,
+              { spoken: this.spoken },
+            ),
+          s.selected,
+        );
+        return true;
+      }
       case 'open':
         this.show(command.call);
         return true;
@@ -759,7 +956,7 @@ export class PanelController {
         else return false;
         return true;
       case 'no':
-        if (!awaiting) return false;
+        if (!yesNo(awaiting)) return false;
         this.hush();
         this.say([
           {
@@ -803,13 +1000,13 @@ export class PanelController {
   }
 
   /** Frank's take on the call on screen. */
-  async whatWouldYouDo(spoken = false): Promise<void> {
+  async whatWouldYouDo(spoken = false, opts: { unsure?: boolean } = {}): Promise<void> {
     const s = this.session;
     if (!s || this.state.streaming || this.state.view.name !== 'call') return;
     const heard = spoken || this.voiceFirst;
     this.spoken = heard;
     await this.stream(
-      (signal) => s.whatWouldYouDo(signal, { spoken: heard }),
+      (signal) => s.whatWouldYouDo(signal, { spoken: heard, unsure: !!opts.unsure }),
       s.selected,
     );
   }
@@ -824,6 +1021,7 @@ export class PanelController {
     this.lastTurn = () => this.stream(make, callId);
     this.cancel();
     this.hush();
+    this.lastSaid = undefined;
     void this.host.stopSpeaking();
     const work = this.begin();
     const spoken = this.spoken;
@@ -863,6 +1061,16 @@ export class PanelController {
       this.setMood(this.restingMood());
     }
     sayReady(true);
+    // The developer's own words answered what the call comes down to.
+    const heard = this.session?.heardAnswer;
+    if (
+      heard &&
+      heard.callId === this.state.selected &&
+      this.state.view.name === 'call'
+    ) {
+      this.session!.heardAnswer = undefined;
+      this.answer(heard.answer, { after: true });
+    }
   }
 
   /** Voice mode: always. Chat: when spoken to. Either way, only with a voice. */
@@ -933,8 +1141,16 @@ export class PanelController {
    */
   private yourTurn(): void {
     if (this.state.voice.state !== 'off' || this.state.streaming) return;
+    const patience: Patience = this.holding
+      ? 'hold'
+      : this.awaiting?.kind === 'walk'
+        ? 'long'
+        : this.awaiting
+          ? 'short'
+          : 'normal';
+    this.set({ turnKind: patience });
     if (this.state.handsFree?.state === 'paused') {
-      void this.host.handsFreeResume();
+      void this.host.handsFreeResume(patience);
       return;
     }
     if (
@@ -944,7 +1160,7 @@ export class PanelController {
       this.talking &&
       this.state.packs?.listening.installed
     )
-      void this.host.handsFreeStart();
+      void this.host.handsFreeStart(patience);
   }
 
   private onVoice(e: VoiceEvent): void {
@@ -1012,7 +1228,7 @@ export class PanelController {
         if (e.state === 'off') {
           this.wantsHandsFree = false;
           this.set({ handsFree: undefined });
-          void this.host.setPinned(this.state.view.name === 'no-plan');
+          void this.host.setPinned(this.state.view.name === 'plans');
           this.setMood(this.restingMood());
           return;
         }
@@ -1036,7 +1252,14 @@ export class PanelController {
       return;
     }
     await this.host.copy(this.session.note());
-    this.set({ noteCopied: true, notice: copiedMessage(plan.source) });
+    this.set({
+      noteCopied: true,
+      notice: copiedMessage(plan.source),
+      visits: {
+        ...this.state.visits,
+        [planKey(plan)]: { ...this.session.progress, copied: true },
+      },
+    });
     this.hush();
     this.say([{ text: copiedMessage(plan.source) }]);
     this.setMood('done');
@@ -1053,7 +1276,6 @@ export class PanelController {
     if (this.state.voice.state === 'needs-pack') return this.declinePack();
     if (this.state.changing) return this.cancelChange();
     if (this.state.voiceMenuOpen) return this.toggleVoiceMenu(false);
-    if (this.state.pickerOpen) return this.togglePicker(false);
     if (this.state.settingsOpen) return this.closeSettings();
     if (this.state.voice.state === 'speaking') return this.stopSpeaking();
     if (this.state.handsFree) return this.stopHandsFree();
@@ -1061,15 +1283,13 @@ export class PanelController {
   }
 
   openSettings(): void {
-    this.set({ settingsOpen: true, pickerOpen: false, voiceMenuOpen: false });
+    this.set({ settingsOpen: true, voiceMenuOpen: false });
     void this.host.setPinned(true);
   }
 
   closeSettings(): void {
     this.set({ settingsOpen: false });
-    void this.host.setPinned(
-      this.state.view.name === 'no-plan' || !!this.state.handsFree,
-    );
+    void this.host.setPinned(this.state.view.name === 'plans' || !!this.state.handsFree);
     void this.reloadConfig();
   }
 
@@ -1213,4 +1433,24 @@ function speakableProse(reply: string): string {
 /** The plan's source, for "Claude Code's plan…". */
 function sourceOf(plan: Plan | undefined): { source?: Plan['source'] } {
   return plan ? { source: plan.source } : {};
+}
+
+/** Plans without repeats, newest first. */
+function uniquePlans(plans: Plan[]): Plan[] {
+  const seen = new Set<string>();
+  return plans
+    .filter((p) => {
+      const key = planKey(p);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
+}
+
+/** Frank asked a yes-or-no question: go with an option, or copy the note. */
+function yesNo(
+  awaiting: { kind: string } | undefined,
+): awaiting is { kind: 'confirm' | 'copy' } {
+  return awaiting?.kind === 'confirm' || awaiting?.kind === 'copy';
 }

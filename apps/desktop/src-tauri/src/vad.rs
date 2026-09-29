@@ -101,6 +101,11 @@ pub struct Turns {
     speech_ms: u32,
     silence_ms: u32,
     paused: bool,
+    /// Quiet before checking whether the turn sounds finished, and quiet
+    /// that ends it whatever was said; 0 means `PAUSE_MS` and `END_MS`.
+    /// Both survive resets.
+    pause_ms: u32,
+    end_ms: u32,
 }
 
 impl Turns {
@@ -109,7 +114,34 @@ impl Turns {
     }
 
     pub fn reset(&mut self) {
-        *self = Self::default();
+        *self = Self {
+            pause_ms: self.pause_ms,
+            end_ms: self.end_ms,
+            ..Self::default()
+        };
+    }
+
+    /// How long a quiet pauses and ends the turn: longer while someone
+    /// walks through a plan and stops to think, shorter for a yes or no.
+    pub fn set_timing(&mut self, pause_ms: u32, end_ms: u32) {
+        self.pause_ms = pause_ms;
+        self.end_ms = end_ms;
+    }
+
+    fn pause(&self) -> u32 {
+        if self.pause_ms == 0 {
+            PAUSE_MS
+        } else {
+            self.pause_ms
+        }
+    }
+
+    fn end(&self) -> u32 {
+        if self.end_ms == 0 {
+            END_MS
+        } else {
+            self.end_ms
+        }
     }
 
     /// Feeds one chunk's speech probability.
@@ -141,11 +173,11 @@ impl Turns {
             self.speech_ms = 0;
             self.silence_ms += CHUNK_MS;
         }
-        if self.silence_ms >= END_MS {
-            *self = Self::default();
+        if self.silence_ms >= self.end() {
+            self.reset();
             return Turn::Ended;
         }
-        if self.silence_ms >= PAUSE_MS && !self.paused {
+        if self.silence_ms >= self.pause() && !self.paused {
             self.paused = true;
             return Turn::Paused;
         }
@@ -210,6 +242,23 @@ mod tests {
         assert_eq!(feed(&mut t, 0.9, 300), [Turn::Resumed]);
         assert_eq!(feed(&mut t, 0.1, 1_700), [Turn::Paused, Turn::Ended]);
         assert!(!t.talking());
+    }
+
+    #[test]
+    fn a_patient_listener_waits_through_thinking_pauses() {
+        let mut t = Turns::default();
+        t.set_timing(1_500, 3_000);
+        assert_eq!(feed(&mut t, 0.9, 500), [Turn::Started]);
+        // A second to think isn't even a pause.
+        assert_eq!(feed(&mut t, 0.1, 1_000), []);
+        assert_eq!(feed(&mut t, 0.9, 300), []);
+        // Two seconds to think: paused, but the turn isn't over.
+        assert_eq!(feed(&mut t, 0.1, 2_000), [Turn::Paused]);
+        assert_eq!(feed(&mut t, 0.9, 300), [Turn::Resumed]);
+        assert_eq!(feed(&mut t, 0.1, 3_100), [Turn::Paused, Turn::Ended]);
+        // The patience outlives the turn.
+        assert_eq!(feed(&mut t, 0.9, 500), [Turn::Started]);
+        assert_eq!(feed(&mut t, 0.1, 2_000), [Turn::Paused]);
     }
 
     #[test]

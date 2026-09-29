@@ -194,3 +194,57 @@ describe('splitSuggestion', () => {
     expect(splitSuggestion('No tag here.')).toEqual({ text: 'No tag here.' });
   });
 });
+
+describe('walking Frank through a call', () => {
+  it('asks him to notice when your words answer what it comes down to', async () => {
+    const brain = new ScriptedBrain([
+      "Right, and there's no Redis in docker-compose.yml either.\n[answer 2]",
+    ]);
+    const s = new Session(brain, ctx, calls());
+    s.select('1');
+    await drain(
+      s.ask('It keeps counters in Redis for many instances. We have one.', undefined, {
+        spoken: true,
+      }),
+    );
+    const sent = brain.requests[0]!.messages.at(-1)!.content;
+    expect(sent).toContain('Will you run more than one instance soon?');
+    expect(sent).toContain('[answer N], where 1 = "Yes", 2 = "No"');
+    expect(s.heardAnswer).toEqual({ callId: '1', answer: 1 });
+    expect(s.turns.at(-1)!.text).toBe(
+      "Right, and there's no Redis in docker-compose.yml either.",
+    );
+  });
+
+  it("doesn't ask once the question is answered", async () => {
+    const brain = new ScriptedBrain(['Fair.']);
+    const s = new Session(brain, ctx, calls());
+    s.select('1');
+    s.answer('1', 1);
+    await drain(s.ask('Why Redis at all?'));
+    expect(brain.requests[0]!.messages.at(-1)!.content).not.toContain('[answer N]');
+    expect(s.heardAnswer).toBeUndefined();
+  });
+
+  it('"I don\'t know" gets the option easiest to change', async () => {
+    const brain = new ScriptedBrain(['In memory, behind the store option.\n[option 2]']);
+    const s = new Session(brain, ctx, calls());
+    s.select('1');
+    await drain(s.whatWouldYouDo(undefined, { unsure: true }));
+    expect(brain.requests[0]!.messages.at(-1)!.content).toMatch(
+      /I don't know the answer to "Will you run more than one instance soon\?"\. Recommend the option that is easiest to change later\./,
+    );
+    expect(s.suggestion).toEqual({ callId: '1', option: 2 });
+  });
+});
+
+describe('splitSuggestion', () => {
+  it('reads both tags, in either order, and hides half-arrived ones', () => {
+    expect(splitSuggestion('Then in memory.\n[option 2]\n[answer 2]')).toEqual({
+      text: 'Then in memory.',
+      option: 2,
+      answer: 2,
+    });
+    expect(splitSuggestion('Right.\n[answ')).toEqual({ text: 'Right.' });
+  });
+});

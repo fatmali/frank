@@ -219,8 +219,7 @@ select {
   cursor: pointer;
 }
 
-.plan-title .title,
-.picker-item .title {
+.plan-title .title {
   overflow: hidden;
   font-size: var(--text-title);
   font-weight: var(--weight-strong);
@@ -244,52 +243,71 @@ select {
   border-top: var(--hairline) solid var(--rule);
 }
 
-/* ---------------------------------------------------------------- picker */
+/* ---------------------------------------------------------------- plans home */
 
-.picker {
-  border-bottom: var(--hairline) solid var(--rule);
-  background: var(--surface-sunk);
+.plans-home {
+  padding: var(--space-2) 0 var(--space-3);
 }
 
-.picker-list {
+.plan-list {
   margin: 0;
-  padding: var(--space-1) 0;
+  padding: 0;
   list-style: none;
 }
 
-.picker-item {
-  display: flex;
-  flex-direction: column;
+.plan-row {
+  display: grid;
+  grid-template-columns: var(--margin-col) 1fr auto;
+  column-gap: var(--space-2);
+  row-gap: 2px;
   width: 100%;
-  padding: var(--space-2) var(--space-4) var(--space-2)
-    calc(var(--space-4) + var(--margin-col) + var(--space-2));
+  padding: var(--space-2) var(--space-4);
   border: 0;
   background: none;
+  color: var(--ink);
   text-align: left;
   cursor: pointer;
 }
 
-.picker-item .title {
-  font-size: var(--text-body);
+.plan-row:hover,
+.plan-row[aria-current='true'] {
+  background: var(--surface-sunk);
 }
 
-.picker-item:hover,
-.picker-item[aria-current='true'] {
-  box-shadow: inset 2px 0 var(--duck);
+.plan-row[aria-current='true'] {
+  box-shadow: inset 3px 0 var(--duck);
 }
 
-.picker > .quiet,
-.picker-foot {
-  padding: var(--space-2) var(--space-4) var(--space-2)
-    calc(var(--space-4) + var(--margin-col) + var(--space-2));
+.plan-number {
+  grid-row: 1 / 3;
+  font-family: var(--font-mark);
+  font-size: var(--text-title);
+  color: var(--ink-muted);
 }
 
-.picker-foot {
-  display: flex;
-  justify-content: space-between;
-  border-top: var(--hairline) solid var(--rule);
+.plan-row-title {
+  overflow: hidden;
+  font-weight: var(--weight-strong);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.plan-row-status {
+  font-size: var(--text-meta);
+  color: var(--duck-ink);
+  white-space: nowrap;
+}
+
+.plan-row-meta {
+  grid-column: 2 / -1;
   font-size: var(--text-meta);
   color: var(--ink-muted);
+}
+
+.plans-foot {
+  margin: var(--space-2) 0 0;
+  padding: 0 var(--space-4) 0 calc(var(--space-4) + var(--margin-col) + var(--space-2));
+  font-size: var(--text-meta);
 }
 
 /* ---------------------------------------------------------------- shared marks */

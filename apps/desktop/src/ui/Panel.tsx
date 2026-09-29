@@ -3,7 +3,8 @@ import type { PanelController } from '../controller.ts';
 import { Composer, type ComposerHandle } from './Composer.tsx';
 import { NoteFooter } from './Footer.tsx';
 import { Onboarding } from './Onboarding.tsx';
-import { PlanHeader, PlanPicker } from './PlanHeader.tsx';
+import { PlanHeader } from './PlanHeader.tsx';
+import { PlansHome } from './PlansHome.tsx';
 import { CallView } from './CallView.tsx';
 import { TheRead } from './TheRead.tsx';
 import { YourCalls } from './YourCalls.tsx';
@@ -24,7 +25,7 @@ function PanelFrame({ controller: c }: { controller: PanelController }) {
   const state = usePanel();
   const frame = useRef<HTMLDivElement>(null);
   const composer = useRef<ComposerHandle>(null);
-  const { view, settingsOpen, pickerOpen, voiceMenuOpen } = state;
+  const { view, settingsOpen, voiceMenuOpen } = state;
 
   // Opening: start (or resume), and focus the composer.
   useEffect(() => {
@@ -57,7 +58,7 @@ function PanelFrame({ controller: c }: { controller: PanelController }) {
       const s = c.getSnapshot();
       const typing =
         e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement;
-      if (text.trim() && (s.pickerOpen || (s.view.name === 'no-plan' && !typing))) {
+      if (text.trim() && s.view.name === 'plans' && !typing) {
         e.preventDefault();
         void c.pastePlan(text);
       }
@@ -99,7 +100,7 @@ function PanelFrame({ controller: c }: { controller: PanelController }) {
       }
       if (mod && e.key.toLowerCase() === 'p') {
         e.preventDefault();
-        c.togglePicker();
+        void c.showPlans();
         return;
       }
       if (mod && e.key === ',') {
@@ -115,7 +116,7 @@ function PanelFrame({ controller: c }: { controller: PanelController }) {
       // A tap turns hands-free on or off (on key up).
       if (
         e.key === ' ' &&
-        (s.view.name === 'read' || s.view.name === 'call' || s.view.name === 'calls')
+        (inSessionView(s.view.name) || (s.view.name === 'plans' && s.history.length > 0))
       ) {
         e.preventDefault();
         if (!e.repeat && !holdTimer && !talking) {
@@ -170,6 +171,14 @@ function PanelFrame({ controller: c }: { controller: PanelController }) {
       if (key === 'v' && inSessionView(s.view.name)) {
         e.preventDefault();
         c.toggleVoiceMenu();
+        return;
+      }
+      if (s.view.name === 'plans' && /^[1-9]$/.test(key)) {
+        const plan = s.history[Number(key) - 1];
+        if (plan) {
+          e.preventDefault();
+          void c.load(plan);
+        }
         return;
       }
       if (s.view.name === 'read' && /^[1-5]$/.test(key) && !s.reading) {
@@ -230,8 +239,8 @@ function PanelFrame({ controller: c }: { controller: PanelController }) {
         return null;
       case 'onboarding':
         return <Onboarding />;
-      case 'no-plan':
-        return <NoPlan />;
+      case 'plans':
+        return state.history.length ? <PlansHome /> : <NoPlan />;
       case 'preparing':
         return <Preparing step={view.step} />;
       case 'context-check':
@@ -249,7 +258,7 @@ function PanelFrame({ controller: c }: { controller: PanelController }) {
 
   const chrome = !settingsOpen && view.name !== 'onboarding' && view.name !== 'starting';
   const inSession = view.name === 'read' || view.name === 'call' || view.name === 'calls';
-  const showComposer = chrome && (inSession || view.name === 'no-plan');
+  const showComposer = chrome && (inSession || view.name === 'plans');
 
   return (
     <div
@@ -259,7 +268,6 @@ function PanelFrame({ controller: c }: { controller: PanelController }) {
       onDragOver={(e) => e.preventDefault()}
     >
       {chrome && <PlanHeader />}
-      {chrome && pickerOpen && <PlanPicker />}
       <main className="panel-body">{body}</main>
       {showComposer && inSession && voiceMenuOpen && <VoiceMenu />}
       {showComposer && <Composer ref={composer} />}

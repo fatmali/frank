@@ -39,8 +39,37 @@ pub fn claude_plans_dir(claude_dir: &Path) -> PathBuf {
     }
 }
 
-/// Recent Claude Code plans, newest first.
+/// How far back the plans home looks, and how many plans it shows.
+pub const HISTORY_DAYS: u64 = 14;
+pub const HISTORY_LIMIT: usize = 40;
+/// Older plans need more sessions searched to find the one that wrote them.
+const HISTORY_TRANSCRIPTS: usize = 80;
+
+/// Recent Claude Code plans, newest first. A plan no session mentions is
+/// credited to the most recent session's project: it was written moments ago.
 pub fn recent_claude_plans(claude_dir: &Path, window: Duration) -> Vec<Plan> {
+    claude_plans(claude_dir, window, usize::MAX, MAX_TRANSCRIPTS, true)
+}
+
+/// The plans home: Claude Code plans from the last two weeks, newest first.
+/// A plan no session mentions has no project, rather than a guessed one.
+pub fn plan_history(claude_dir: &Path) -> Vec<Plan> {
+    claude_plans(
+        claude_dir,
+        Duration::from_secs(HISTORY_DAYS * 24 * 60 * 60),
+        HISTORY_LIMIT,
+        HISTORY_TRANSCRIPTS,
+        false,
+    )
+}
+
+fn claude_plans(
+    claude_dir: &Path,
+    window: Duration,
+    limit: usize,
+    transcripts: usize,
+    guess_project: bool,
+) -> Vec<Plan> {
     let dir = claude_plans_dir(claude_dir);
     let cutoff = SystemTime::now()
         .checked_sub(window)
@@ -55,8 +84,9 @@ pub fn recent_claude_plans(claude_dir: &Path, window: Duration) -> Vec<Plan> {
         .filter(|(m, _)| *m >= cutoff)
         .collect();
     files.sort_by_key(|f| std::cmp::Reverse(f.0));
+    files.truncate(limit);
 
-    let transcripts = recent_transcripts(claude_dir, window);
+    let transcripts = recent_transcripts(claude_dir, window, transcripts);
     files
         .into_iter()
         .filter_map(|(modified, path)| {
@@ -69,7 +99,7 @@ pub fn recent_claude_plans(claude_dir: &Path, window: Duration) -> Vec<Plan> {
                 source: PlanSource::ClaudeCode,
                 title: title_of(&body),
                 body,
-                project: project_for_plan(&transcripts, &name),
+                project: project_for_plan(&transcripts, &name, guess_project),
                 modified_at: rfc3339(modified),
                 origin: path.to_string_lossy().into_owned(),
             })
@@ -78,7 +108,7 @@ pub fn recent_claude_plans(claude_dir: &Path, window: Duration) -> Vec<Plan> {
 }
 
 /// Session transcripts modified within the window, newest first.
-fn recent_transcripts(claude_dir: &Path, window: Duration) -> Vec<PathBuf> {
+fn recent_transcripts(claude_dir: &Path, window: Duration, max: usize) -> Vec<PathBuf> {
     let cutoff = SystemTime::now()
         .checked_sub(window)
         .unwrap_or(SystemTime::UNIX_EPOCH);
@@ -99,22 +129,22 @@ fn recent_transcripts(claude_dir: &Path, window: Duration) -> Vec<PathBuf> {
         .filter(|(m, _)| *m >= cutoff)
         .collect();
     found.sort_by_key(|f| std::cmp::Reverse(f.0));
-    found
-        .into_iter()
-        .take(MAX_TRANSCRIPTS)
-        .map(|(_, p)| p)
-        .collect()
+    found.into_iter().take(max).map(|(_, p)| p).collect()
 }
 
-/// The working directory of the session that wrote the plan, or of the most
-/// recent session if none mentions it.
-fn project_for_plan(transcripts: &[PathBuf], plan_file: &str) -> Option<String> {
+/// The working directory of the session that wrote the plan, or, when
+/// `guess` is set and no session mentions it, of the most recent session.
+fn project_for_plan(transcripts: &[PathBuf], plan_file: &str, guess: bool) -> Option<String> {
     let tails: Vec<String> = transcripts.iter().filter_map(|t| tail(t).ok()).collect();
     tails
         .iter()
         .find(|t| t.contains(plan_file))
         .and_then(|t| last_cwd(t))
-        .or_else(|| tails.first().and_then(|t| last_cwd(t)))
+        .or_else(|| {
+            guess
+                .then(|| tails.first().and_then(|t| last_cwd(t)))
+                .flatten()
+        })
 }
 
 fn tail(path: &Path) -> std::io::Result<String> {
@@ -174,6 +204,34 @@ mod tests {
         assert_eq!(found[0].project.as_deref(), Some("/Users/me/my-app"));
         assert_eq!(found[0].source, PlanSource::ClaudeCode);
         assert!(found[0].origin.ends_with("jaunty-petting-nebula.md"));
+    }
+
+    #[test]
+    fn the_history_never_guesses_a_project() {
+        let claude = tempfile::tempdir().unwrap();
+        write(
+            &claude.path().join("plans/old-quiet-owl.md"),
+            "# Tidy the logger\n1. Rename things",
+        );
+        write(
+            &claude.path().join("plans/jaunty-petting-nebula.md"),
+            "# Add rate limiting\n1. Use Redis",
+        );
+        write(
+            &claude.path().join("projects/-Users-me-my-app/abc.jsonl"),
+            "{\"cwd\":\"/Users/me/my-app\",\"message\":\"wrote plans/jaunty-petting-nebula.md\"}\n",
+        );
+        let history = plan_history(claude.path());
+        let by_title = |t: &str| history.iter().find(|p| p.title == t).unwrap();
+        assert_eq!(history.len(), 2);
+        assert_eq!(
+            by_title("Add rate limiting").project.as_deref(),
+            Some("/Users/me/my-app")
+        );
+        assert_eq!(by_title("Tidy the logger").project, None);
+        // Just written, a plan no session mentions still gets the latest project.
+        let recent = recent_claude_plans(claude.path(), Duration::from_secs(600));
+        assert!(recent.iter().all(|p| p.project.is_some()));
     }
 
     #[test]

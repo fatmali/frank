@@ -36,6 +36,7 @@ fn main() {
             commands::brain_stream,
             commands::brain_cancel,
             commands::recent_plans,
+            commands::plan_history,
             commands::read_plan_file,
             commands::gather_context,
             commands::trust_project,

@@ -129,24 +129,39 @@ pub fn brain_cancel(state: State<'_, AppState>, id: u32) {
 pub async fn recent_plans(state: State<'_, AppState>) -> Result<Vec<Plan>, ()> {
     let minutes = u64::from(state.config().plans.window_minutes.max(1));
     Ok(tokio::task::spawn_blocking(move || {
-        let mut plans = frank_core::plans::recent_claude_plans(
+        with_repo_roots(frank_core::plans::recent_claude_plans(
             &frank_core::plans::claude_dir(),
             Duration::from_secs(minutes * 60),
-        );
-        // The agent may have been run from a subfolder; the repo is the project.
-        for plan in &mut plans {
-            if let Some(root) = plan
-                .project
-                .as_deref()
-                .and_then(|p| repo_root(Path::new(p)))
-            {
-                plan.project = Some(root.to_string_lossy().into_owned());
-            }
-        }
-        plans
+        ))
     })
     .await
     .unwrap_or_default())
+}
+
+/// Every plan from the last two weeks, for the plans home.
+#[tauri::command]
+pub async fn plan_history() -> Result<Vec<Plan>, ()> {
+    Ok(tokio::task::spawn_blocking(|| {
+        with_repo_roots(frank_core::plans::plan_history(
+            &frank_core::plans::claude_dir(),
+        ))
+    })
+    .await
+    .unwrap_or_default())
+}
+
+/// The agent may have been run from a subfolder; the repo is the project.
+fn with_repo_roots(mut plans: Vec<Plan>) -> Vec<Plan> {
+    for plan in &mut plans {
+        if let Some(root) = plan
+            .project
+            .as_deref()
+            .and_then(|p| repo_root(Path::new(p)))
+        {
+            plan.project = Some(root.to_string_lossy().into_owned());
+        }
+    }
+    plans
 }
 
 const MAX_PLAN_BYTES: u64 = 1024 * 1024;
@@ -358,14 +373,14 @@ pub async fn download_pack(app: AppHandle, pack: String) -> Result<(), String> {
 /// Hands-free conversation: Frank listens until told to stop, and hears for
 /// himself when the developer has finished a thought.
 #[tauri::command]
-pub fn hands_free_start(app: AppHandle, voice: State<'_, Voice>) {
-    voice.hands_free_start(&app);
+pub fn hands_free_start(app: AppHandle, voice: State<'_, Voice>, patience: Option<String>) {
+    voice.hands_free_start(&app, crate::voice::Patience::parse(patience.as_deref()));
 }
 
 /// Frank has answered; listen again.
 #[tauri::command]
-pub fn hands_free_resume(app: AppHandle, voice: State<'_, Voice>) {
-    voice.hands_free_resume(&app);
+pub fn hands_free_resume(app: AppHandle, voice: State<'_, Voice>, patience: Option<String>) {
+    voice.hands_free_resume(&app, crate::voice::Patience::parse(patience.as_deref()));
 }
 
 #[tauri::command]

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseBreakdown } from '../src/breakdown.ts';
-import { parseCommand } from '../src/commands.ts';
+import { parseCommand, pickByWords } from '../src/commands.ts';
 import { RATE_LIMIT_BREAKDOWN, loadFixture } from './helpers.ts';
 
 const ctx = loadFixture('rate-limit');
@@ -112,4 +112,52 @@ describe('answering Frank’s yes-or-no questions', () => {
   it('means the hinge when Frank asked the hinge, not a yes-or-no question', () => {
     expect(parseCommand('yeah', redis)).toEqual({ type: 'answer', answer: 0 });
   });
+});
+
+describe('finding your way by voice', () => {
+  it.each([
+    ['show me my plans', { type: 'plans' }],
+    ['back to plans', { type: 'plans' }],
+    ['switch plan', { type: 'plans' }],
+    ['you explain it', { type: 'explain' }],
+    ["I haven't read it", { type: 'explain' }],
+    ['hold on', { type: 'hold' }],
+    ['let me think', { type: 'hold' }],
+    ['wait, what?', { type: 'again' }],
+    ['say that again', { type: 'again' }],
+    ['simpler', { type: 'again' }],
+  ])('%s', (said, command) => {
+    expect(parseCommand(said, redis)).toEqual(command);
+  });
+
+  it('"I don’t know" means unsure only when there is something to answer', () => {
+    expect(parseCommand("I don't know", redis)).toEqual({ type: 'unsure' });
+    expect(
+      parseCommand("I don't know", { ...redis, hinge: undefined } as never),
+    ).toBeUndefined();
+  });
+});
+
+describe('picking a plan by voice', () => {
+  const plans = [
+    { id: 'a', text: 'Add rate limiting to the public API' },
+    { id: 'b', text: 'Migrate sessions to JWT' },
+    { id: 'c', text: 'Tidy the logger' },
+  ];
+  it.each([
+    ['the second one', 'b'],
+    ['the last one', 'c'],
+    ['the rate limiting one', 'a'],
+    ['JWT', 'b'],
+    ["let's do the logger", 'c'],
+  ])('%s', (said, id) => {
+    expect(pickByWords(said, plans)).toBe(id);
+  });
+
+  it.each(['why is the logger slow', 'the plan', 'something else entirely'])(
+    'leaves "%s" alone',
+    (said) => {
+      expect(pickByWords(said, plans)).toBeUndefined();
+    },
+  );
 });

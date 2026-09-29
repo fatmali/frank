@@ -15,7 +15,8 @@ export function NoteFooter() {
 
   let status: React.ReactNode = null;
   if (notice) status = notice;
-  else if (voice.state === 'speaking')
+  // In voice mode the voice bar already says so.
+  else if (voice.state === 'speaking' && !c.voiceFirst)
     status = (
       <button className="text-button quiet-button" onClick={() => c.stopSpeaking()}>
         Frank is talking. Any key stops him.

@@ -57,6 +57,9 @@ export function voiceMode(config: Config | undefined): VoiceMode {
 
 export type PackStatus = Record<Pack, { installed: boolean; megabytes: number }>;
 
+/** How long a quiet ends the developer's turn, by what Frank asked. */
+export type Patience = 'short' | 'normal' | 'long' | 'hold';
+
 /** The models behind voice, each downloaded once, with consent. */
 export type Pack = 'listening' | 'voices';
 
@@ -112,6 +115,8 @@ export interface Host {
   saveApiKey(kind: BrainKind, key: string): Promise<void>;
   stream(request: BrainRequest, signal?: AbortSignal): AsyncIterable<string>;
   recentPlans(): Promise<Plan[]>;
+  /** Every plan from the last two weeks, for the plans home. */
+  planHistory(): Promise<Plan[]>;
   readPlanFile(path: string): Promise<Plan>;
   gatherContext(plan: Plan): Promise<Gathered>;
   trustProject(root: string): Promise<void>;
@@ -132,10 +137,13 @@ export interface Host {
   voiceStart(): Promise<void>;
   /** Stops listening and transcribes; the words arrive as a "heard" event. */
   voiceStop(): Promise<void>;
-  /** Hands-free: Frank listens, and hears for himself when you've finished. */
-  handsFreeStart(): Promise<void>;
+  /**
+   * Hands-free: Frank listens, and hears for himself when you've finished.
+   * `patience`: how long a quiet ends your turn (a walk-through gets longer).
+   */
+  handsFreeStart(patience?: Patience): Promise<void>;
   /** Frank has answered; listen again. */
-  handsFreeResume(): Promise<void>;
+  handsFreeResume(patience?: Patience): Promise<void>;
   handsFreeStop(): Promise<void>;
   downloadPack(pack: Pack): Promise<void>;
   packStatus(): Promise<PackStatus>;

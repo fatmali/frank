@@ -53,6 +53,7 @@ export const tauriHost: Host = {
   },
 
   recentPlans: () => invoke<Plan[]>('recent_plans'),
+  planHistory: () => invoke<Plan[]>('plan_history'),
   readPlanFile: (path) => invoke<Plan>('read_plan_file', { path }),
   gatherContext: (plan) => invoke<Gathered>('gather_context', { plan }),
   trustProject: (root) => invoke('trust_project', { root }),
@@ -74,8 +75,10 @@ export const tauriHost: Host = {
   },
   voiceStart: () => invoke('voice_start'),
   voiceStop: () => invoke('voice_stop'),
-  handsFreeStart: () => invoke('hands_free_start'),
-  handsFreeResume: () => invoke('hands_free_resume'),
+  handsFreeStart: (patience) =>
+    invoke('hands_free_start', { patience: patience ?? null }),
+  handsFreeResume: (patience) =>
+    invoke('hands_free_resume', { patience: patience ?? null }),
   handsFreeStop: () => invoke('hands_free_stop'),
   downloadPack: (pack) => invoke('download_pack', { pack }),
   packStatus: () => invoke<PackStatus>('pack_status'),
