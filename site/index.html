@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!--
+      THESIS: Turn plan review into one physical print pass; refuse the generic developer-SaaS hero and feature grid.
+      OWN-WORLD: Silver proof stock, dense ink, marigold and hot-pink misregistration, square print-shop controls, repeated duck editions.
+      STORY: See the plan overload, watch Frank isolate three calls, trust the local workflow, then try the current macOS build.
+      FIRST VIEWPORT: A blunt headline and two actions face a tilted 47-step proof; the primary action sits directly under the promise.
+      FORM: The fifth grounded direction, staged as a print proof becoming a decision edition; seed a1944e02.
+    -->
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Frank is the local rubber duck that finds the few decisions hiding in your coding agent's plan and talks them through with you."
+    />
+    <meta name="theme-color" content="#dce1de" />
+    <meta property="og:title" content="Frank — plan review, with a duck" />
+    <meta
+      property="og:description"
+      content="Your agent wrote 47 steps. Frank found the three that need you."
+    />
+    <title>Frank — plan review, with a duck</title>
+    <link rel="icon" href="%BASE_URL%frank.svg" type="image/svg+xml" />
+    <script type="module" src="/src/main.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to the plan</a>
+
+    <header class="masthead" aria-label="Primary">
+      <a class="brand" href="#top" aria-label="Frank, home">
+        <svg class="brand-duck" viewBox="-1 -1 38 38" aria-hidden="true">
+          <path
+            d="M15.5 4.5 C20 4.5 23 7.4 23.6 11 C26.6 10.9 29.8 11.3 31.8 12.3 C33.9 13.4 33.8 16.9 31.6 17.9 C29.2 19 26.2 19.4 23.6 19.4 C23.3 20.4 22.8 21.2 22.2 21.9 C26.6 23.2 29.8 26.8 30.2 35 L5 35 C4.5 29.5 5.8 25.4 8.4 22.6 C6.7 20.8 5.8 18.2 5.8 15.2 C5.8 9 9.8 4.5 15.5 4.5 Z"
+          />
+          <circle cx="18.6" cy="11.1" r="1.8" />
+        </svg>
+        <span>FRANK</span>
+      </a>
+      <nav class="nav-links" aria-label="Sections">
+        <a href="#how">How he works</a>
+        <a href="#privacy">Stays local</a>
+        <a href="#moods">Moods</a>
+      </nav>
+      <a
+        class="nav-github"
+        href="https://github.com/fatmali/frank"
+        aria-label="View Frank on GitHub"
+      >
+        GitHub ↗
+      </a>
+    </header>
+
+    <main id="main">
+      <section class="hero" id="top">
+        <div class="hero-copy">
+          <p class="hero-bite">He’s a duck. He’s frank.</p>
+          <h1 class="print-title">
+            Your agent wrote 47 steps. Frank found the 3 that need you.
+          </h1>
+          <p class="hero-deck">
+            A local, voice-first rubber duck for the moment your coding agent hands you a
+            plan and your brain quietly leaves the building.
+          </p>
+          <div class="hero-actions">
+            <a
+              class="button button-primary"
+              href="https://github.com/fatmali/frank/actions/workflows/ci.yml?query=branch%3Amain"
+            >
+              Try the wobbly macOS build
+            </a>
+            <a class="button button-plain" href="https://github.com/fatmali/frank">
+              Read the source ↗
+            </a>
+          </div>
+          <p class="early-note">
+            Early. Open source. Unsigned. Frank has opinions about two of those.
+          </p>
+        </div>
+
+        <div class="press-wrap">
+          <div class="registration-mark mark-a" aria-hidden="true">+</div>
+          <div class="registration-mark mark-b" aria-hidden="true">+</div>
+          <article class="plan-press" aria-labelledby="proof-title">
+            <header class="proof-head">
+              <div>
+                <p>Illustrative plan / rate limiting</p>
+                <h2 id="proof-title">AGENT EDITION, UNREVIEWED</h2>
+              </div>
+              <span>47 STEPS</span>
+            </header>
+
+            <div class="plan-sheet">
+              <ol class="plan-copy" aria-label="Excerpt from an illustrative coding plan">
+                <li><span>01</span>Inspect the current request pipeline</li>
+                <li><span>08</span>Add rate-limit middleware</li>
+                <li class="called"><span>17</span>Store request counts in Redis</li>
+                <li><span>24</span>Return standard quota headers</li>
+                <li class="called"><span>31</span>Apply middleware to every route</li>
+                <li class="called"><span>36</span>Add express-rate-limit</li>
+                <li><span>47</span>Update documentation</li>
+              </ol>
+              <div class="plan-density" aria-hidden="true"></div>
+              <div class="squeegee" aria-hidden="true">
+                <span>FRANK PASS</span>
+              </div>
+            </div>
+
+            <div class="decision-strip" aria-label="Decisions Frank found">
+              <button class="decision-tab active" type="button" data-decision="redis">
+                Redis?
+              </button>
+              <button class="decision-tab" type="button" data-decision="health">
+                /health?
+              </button>
+              <button class="decision-tab" type="button" data-decision="dependency">
+                New dependency?
+              </button>
+            </div>
+
+            <div class="frank-read" aria-live="polite">
+              <div class="frank-avatar" aria-hidden="true">
+                <svg viewBox="-1 -1 38 38">
+                  <path
+                    d="M15.5 4.5 C20 4.5 23 7.4 23.6 11 C26.6 10.9 29.8 11.3 31.8 12.3 C33.9 13.4 33.8 16.9 31.6 17.9 C29.2 19 26.2 19.4 23.6 19.4 C23.3 20.4 22.8 21.2 22.2 21.9 C26.6 23.2 29.8 26.8 30.2 35 L5 35 C4.5 29.5 5.8 25.4 8.4 22.6 C6.7 20.8 5.8 18.2 5.8 15.2 C5.8 9 9.8 4.5 15.5 4.5 Z"
+                  />
+                  <circle cx="18.6" cy="11.1" r="1.8" />
+                </svg>
+              </div>
+              <div>
+                <p class="read-question" id="decision-question">
+                  Are you running more than one instance?
+                </p>
+                <p class="read-receipt" id="decision-receipt">
+                  I looked. There is no Redis in this repo or its docker-compose.
+                </p>
+                <p class="read-verdict" id="decision-verdict">
+                  One instance? Use memory. The plan invented an operations problem.
+                </p>
+              </div>
+            </div>
+
+            <button class="print-button" id="run-pass" type="button">
+              Run Frank over the plan
+            </button>
+          </article>
+        </div>
+      </section>
+
+      <aside class="ticker" aria-label="Frank's operating principles">
+        <div>
+          <span>READS PLANS, NOT MINDS</span>
+          <span>WINGS, NOT HANDS</span>
+          <span>NO CLOUD. LOCAL POND.</span>
+          <span>JUDGING IS THE PRODUCT</span>
+          <span aria-hidden="true">READS PLANS, NOT MINDS</span>
+          <span aria-hidden="true">WINGS, NOT HANDS</span>
+        </div>
+      </aside>
+
+      <section class="approve-section">
+        <div class="approve-type">
+          <p>Approve is not a review.</p>
+          <p>It’s a reflex with a keyboard.</p>
+        </div>
+        <div class="approve-copy">
+          <p>
+            Step 31 adds Redis. You don’t have Redis. You’re going to find that out around
+            6pm on a Friday.
+          </p>
+          <p>
+            Frank ignores the routine bits and pulls forward the expensive, awkward,
+            hard-to-undo calls your plan made while you were skimming.
+          </p>
+        </div>
+      </section>
+
+      <section class="passes" id="how" aria-labelledby="how-title">
+        <header class="section-head">
+          <h2 id="how-title">ONE PLAN. THREE PASSES.</h2>
+          <p>
+            Not a second agent reviewing the first agent. A duck helping the human make
+            the calls.
+          </p>
+        </header>
+
+        <div class="pass pass-find">
+          <p class="pass-verb">FIND</p>
+          <div>
+            <h3>The plan is already open.</h3>
+            <p>
+              Summon Frank from the menu bar. He finds the latest plan for your project
+              and asks before reading the repository context it mentions. No paste
+              ceremony.
+            </p>
+          </div>
+          <code>⌥⇧Space</code>
+        </div>
+        <div class="pass pass-check">
+          <p class="pass-verb">CHECK</p>
+          <div>
+            <h3>Receipts, not vibes.</h3>
+            <p>
+              Frank checks the real code. Missing infrastructure, broad route changes, and
+              new dependencies get called out in plain language.
+            </p>
+          </div>
+          <code>repo ≠ plan</code>
+        </div>
+        <div class="pass pass-decide">
+          <p class="pass-verb">DECIDE</p>
+          <div>
+            <h3>One question at a time.</h3>
+            <p>
+              Talk it through. Ask what Frank would do. Get a straight answer, then hand
+              your agent a short note: keep this, change that, drop this.
+            </p>
+          </div>
+          <code>3 calls → 1 note</code>
+        </div>
+      </section>
+
+      <section class="session" aria-labelledby="session-title">
+        <header>
+          <h2 id="session-title">THIS IS WHAT USEFUL JUDGMENT SOUNDS LIKE.</h2>
+          <p>Short. Specific. Slightly annoyed.</p>
+        </header>
+        <div class="transcript">
+          <p class="speaker you">YOU</p>
+          <blockquote>“No, just one instance.”</blockquote>
+          <p class="speaker frank">FRANK</p>
+          <blockquote>
+            “Then in memory. The plan is solving a scaling problem you don’t have. Next:
+            it wants to rate-limit <code>/health</code>, which means your load balancer
+            gets throttled and declares you dead.”
+          </blockquote>
+          <div class="copied-note">
+            <p>NOTE FOR YOUR AGENT / COPIED</p>
+            <q
+              >Use in-memory counters; limit only <code>/api/public</code>, not
+              <code>/health</code>; keep express-rate-limit.</q
+            >
+          </div>
+        </div>
+      </section>
+
+      <section class="moods" id="moods" aria-labelledby="moods-title">
+        <header class="section-head">
+          <h2 id="moods-title">FIVE MOODS. ZERO MYSTERY.</h2>
+          <p>Frank lives in the menu bar. You always know where you stand.</p>
+        </header>
+        <div class="mood-rack">
+          <article class="mood-print mood-idle">
+            <div class="edition-duck" data-mark="">
+              <span class="duck-ascii"> __<br />(o )&gt;</span>
+            </div>
+            <h3>idle</h3>
+            <p>Available for judgment.</p>
+          </article>
+          <article class="mood-print mood-listening">
+            <div class="edition-duck" data-mark=")))">
+              <span class="duck-ascii"> __<br />(O )&gt;</span>
+            </div>
+            <h3>listening</h3>
+            <p>Audio stays on your Mac.</p>
+          </article>
+          <article class="mood-print mood-thinking">
+            <div class="edition-duck" data-mark="...">
+              <span class="duck-ascii"> __<br />(- )&gt;</span>
+            </div>
+            <h3>thinking</h3>
+            <p>Checking the receipts.</p>
+          </article>
+          <article class="mood-print mood-judging">
+            <div class="edition-duck" data-mark="?!">
+              <span class="duck-ascii"> __<br />(o_)&gt;</span>
+            </div>
+            <h3>judging</h3>
+            <p>Not a bug. The product.</p>
+          </article>
+          <article class="mood-print mood-done">
+            <div class="edition-duck" data-mark="GO">
+              <span class="duck-ascii"> __<br />(^ )&gt;</span>
+            </div>
+            <h3>done</h3>
+            <p>Go ship. Quack.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="brains" aria-labelledby="brains-title">
+        <h2 id="brains-title">BRING THE BRAIN YOU ALREADY PAY FOR.</h2>
+        <p>
+          Claude Code <span>•</span> GitHub Copilot <span>•</span> Cursor
+          <span>•</span> Anthropic <span>•</span> OpenAI-compatible <span>•</span> Ollama
+        </p>
+        <p class="brains-foot">
+          Frank reads. Your agent writes. Nobody gets another subscription.
+        </p>
+      </section>
+
+      <section class="privacy" id="privacy" aria-labelledby="privacy-title">
+        <div class="privacy-stamp" aria-hidden="true">
+          <span>LOCAL</span>
+          <span>POND</span>
+        </div>
+        <div>
+          <h2 id="privacy-title">NO CLOUD. HE HAS A POND.</h2>
+          <p>
+            Plans and code are read only when you call Frank. There’s no Frank account,
+            server, telemetry, or cloud sync. Voice capture, transcription, code-aware
+            pronunciation, and speech all run on your Mac. Audio is never saved or sent.
+          </p>
+          <p>
+            Pick Ollama and nothing leaves your machine at all. Pick another brain and
+            only the words go to the model you chose—the same as typing them yourself.
+          </p>
+        </div>
+      </section>
+
+      <section class="final-cta">
+        <div class="final-duck" aria-hidden="true">
+          <span> __</span>
+          <span>(o_)&gt;</span>
+        </div>
+        <div>
+          <h2>Your plan is probably fine.</h2>
+          <p>Frank would still like a word.</p>
+        </div>
+        <div class="final-actions">
+          <a
+            class="button button-primary"
+            href="https://github.com/fatmali/frank/actions/workflows/ci.yml?query=branch%3Amain"
+          >
+            Try Frank on macOS
+          </a>
+          <a class="source-link" href="https://github.com/fatmali/frank">
+            Fork him on GitHub ↗
+          </a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>FRANK / OPEN SOURCE / MIT</p>
+      <p>He has wings, not hands.</p>
+      <a href="#top">Back to the suspicious plan ↑</a>
+    </footer>
+  </body>
+</html>
