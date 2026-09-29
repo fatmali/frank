@@ -1,0 +1,17 @@
+{
+  "calls": [
+    {
+      "keywords": ["drop", "sessions table", "migration"],
+      "why": "Irreversible data deletion"
+    },
+    {
+      "keywords": ["revoke", "30-day", "expiry"],
+      "why": "JWTs can't be revoked; the app relies on instant revocation"
+    },
+    {
+      "keywords": ["clients", "mobile", "header"],
+      "why": "Old mobile clients will break until they update"
+    }
+  ],
+  "contradicted": ["revoke"]
+}

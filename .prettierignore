@@ -1,0 +1,7 @@
+target/
+node_modules/
+dist/
+pnpm-lock.yaml
+*.md
+assets/
+packages/engine/fixtures/

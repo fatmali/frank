@@ -1,0 +1,8 @@
+node_modules/
+dist/
+target/
+.DS_Store
+*.log
+# local research notes, never committed
+research_notes/
+reports/

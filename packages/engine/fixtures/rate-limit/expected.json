@@ -1,0 +1,14 @@
+{
+  "calls": [
+    {
+      "keywords": ["redis"],
+      "why": "No Redis in docker-compose; single instance, so in-memory counters would do"
+    },
+    {
+      "keywords": ["every route", "all routes", "/health"],
+      "why": "Limiting /health throttles the load balancer's health check"
+    },
+    { "keywords": ["express-rate-limit", "dependency"], "why": "New dependency" }
+  ],
+  "contradicted": ["redis"]
+}
