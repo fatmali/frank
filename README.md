@@ -265,18 +265,47 @@ which case he's just... there. Watching. You asked for this.)
 
 ```
      .--.
-    /  , \      Frank is hatching. M1 is under way.
+    /  , \      Frank has hatched. He's wobbly. M1 is under way.
    |  /   |
     \/   /
      '--'
 ```
 
+What works today: the menu bar duck, the hotkey, finding your latest Claude
+Code plan, reading the files it mentions, finding the calls, talking them
+through, and copying the note. Brains: Claude Code, GitHub Copilot, the
+Anthropic and OpenAI APIs (or anything OpenAI-compatible), and Ollama.
+
+### Try it (macOS, early, unsigned)
+
+1. Open the latest green [CI run](https://github.com/fatmali/frank/actions/workflows/ci.yml?query=branch%3Amain)
+   and download **Frank-macos**.
+2. Unzip it and move `Frank.app` to Applications.
+3. Frank isn't signed yet, so macOS will call him damaged. He isn't. He's
+   just unsigned:
+
+   ```sh
+   xattr -dr com.apple.quarantine /Applications/Frank.app
+   ```
+
+4. Open Frank. He'll ask what to think with, then offer you a sample plan.
+
+Or build him yourself (Node 22, pnpm, Rust 1.94+):
+
+```sh
+pnpm install
+pnpm --filter @frank/desktop tauri dev    # the real app
+pnpm --filter @frank/desktop demo         # just the panel, in a browser, with a pretend brain
+```
+
+The fine print lives in the docs:
+
 - [docs/design.md](docs/design.md): what Frank does and how it's built
 - [docs/ux.md](docs/ux.md): how Frank looks, sounds and behaves
 - [docs/m1-plan.md](docs/m1-plan.md): the M1 work plan, task by task
 
-Ideas, pushback and bug reports for things that don't exist yet are all
-welcome. Frank would want it that way. Frankly.
+Ideas, pushback and bug reports are all welcome. Frank would want it that
+way. Frankly.
 
 ## License
 
