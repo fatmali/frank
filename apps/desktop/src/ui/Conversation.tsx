@@ -13,10 +13,12 @@ export function Conversation({ callId }: { callId: string | undefined }) {
   const count = turns.length + (live ? 1 : 0) + (turnError ? 1 : 0);
 
   // A new turn scrolls to its start, so Frank is read from the top.
+  // In voice mode the plan stays in view: what was said is in the strip below.
   useEffect(() => {
+    if (c.voiceFirst) return;
     const all = box.current?.querySelectorAll('.turn');
     all?.[all.length - 1]?.scrollIntoView({ block: 'nearest' });
-  }, [count]);
+  }, [count, c]);
 
   if (!count) return null;
   return (
@@ -139,7 +141,7 @@ function Evidence({
   while (shown.length && !shown[shown.length - 1]!.trim()) shown.pop();
   const where = at ? `${item.file}:${at}` : item.file;
   return (
-    <details className={flagged ? 'evidence flagged' : 'evidence'}>
+    <details className={flagged ? 'evidence flagged' : 'evidence'} open={flagged}>
       <summary>
         <span className="evidence-path">{where}</span>
         <span className="evidence-note">

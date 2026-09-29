@@ -326,7 +326,7 @@ fn place_panel(app: &AppHandle, panel: &WebviewWindow, anchor: Anchor) {
         left + f64::from(area.size.width),
         top + f64::from(area.size.height),
     );
-    let width = 480.0 * scale;
+    let width = 520.0 * scale;
     let gap = 6.0 * scale;
 
     let (x, y) = match anchor {

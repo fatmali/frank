@@ -66,7 +66,7 @@ export const tauriHost: Host = {
   copy: (text) => writeText(text),
   openUrl: (url) => openUrl(url),
   fitHeight: (height) =>
-    getCurrentWindow().setSize(new LogicalSize(480, Math.ceil(height))),
+    getCurrentWindow().setSize(new LogicalSize(520, Math.ceil(height))),
   onShown(handler) {
     void listen('panel-shown', handler);
   },

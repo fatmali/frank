@@ -116,7 +116,7 @@ Every task ends with something that runs or is tested.
 | D7 | Paste and drop a plan | Both start a session |
 | D8 | Onboarding: brain choice with live status, hotkey, sample plan | New install to first useful answer in under 60 s |
 | D9 | Sticky mode (off by default): always-on-top duck, drag, remembered position | Toggled from the menu and settings |
-| D10 | Design tokens as CSS variables (ux.md §8), bundled Monaspace Neon and Radon | No hard-coded colours or radii in components |
+| D10 | Design tokens as CSS variables (ux.md §8), bundled Recursive | No hard-coded colours or radii in components |
 | D11 | Motion: the marking moment, the note nod; reduced-motion variants | Matches ux.md §8.6 |
 | D12 | Settings: brain, hotkey, sticky mode, plan window, per-project context trust, talk back | Changes persist to `config.toml` |
 | D13 | Voice: hold-to-talk on the hotkey and `Space`, microphone capture, on-device Whisper transcription with a consented model download, spoken replies, listening states | Capture and resampling tested; transcription and speech smoke-tested on a Mac |

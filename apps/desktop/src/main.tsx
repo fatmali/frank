@@ -1,6 +1,4 @@
-import '@fontsource/monaspace-neon/latin-400.css';
-import '@fontsource/monaspace-neon/latin-600.css';
-import '@fontsource/monaspace-radon/latin-400.css';
+import '@fontsource-variable/recursive/full.css';
 import './styles/tokens.css';
 import './styles/panel.css';
 import { createRoot } from 'react-dom/client';

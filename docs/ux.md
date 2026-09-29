@@ -517,46 +517,39 @@ margin notes.
 
 ### 8.2 Colour tokens
 
-Neutrals are tinted slightly toward pond water: green-grey, not blue-black.
-Amber is Frank. Bill orange is reserved for one meaning: *the code
-contradicts the plan*.
+From a rubber duck in water. Each colour has one job, and no meaning is
+carried by colour alone: outcomes are also words ("kept", "changed").
 
 | Token | Light | Dark | Use |
 | --- | --- | --- | --- |
-| `surface` | `#FBFCFB` | `#1B2421` | Panel background |
-| `surface-sunk` | `#F1F4F2` | `#151D1A` | Evidence blocks, composer |
-| `ink` | `#1C2421` | `#E6ECE9` | Primary text |
-| `ink-muted` | `#5B6863` | `#98A6A0` | Secondary text, plan metadata |
-| `rule` | `#DCE2DF` | `#2C3833` | Dividers between regions |
-| `duck` | `#E8A317` | `#F2B53A` | Frank's marks, focus ring, selected call, listening meter |
-| `duck-ink` | `#8A5D00` | `#F2B53A` | Amber text (AA contrast on `surface`) |
-| `bill` | `#C2410C` | `#F0763B` | "Code contradicts the plan" only |
+| `surface-sunk` (Pond) | `#E9F0EE` | `#123330` | The panel's ground |
+| `surface` (Paper) | `#FBFCFB` | `#1A3F3B` | The plan, and what sits on it |
+| `ink` | `#16302B` | `#E4EEEB` | Text |
+| `ink-muted` | `#4E6460` | `#A7BDB8` | Secondary text |
+| `rule` | `#D3DFDB` | `#2B524D` | Edges |
+| `duck` | `#F2C230` | `#F2C230` | Frank: what he's looking at and saying, and what he'd pick. Never carries text. |
+| `duck-ink` | `#7A5C00` | `#F2C230` | Frank's colour as text |
+| `bill` | `#B83D0A` | `#FF8A57` | The code disagrees with the plan, only |
+| `reed` | `#276B4E` | `#6CC49A` | Decided |
 
-Rules:
-- Amber never appears as a large filled area. It's ink: marks, underlines,
-  the focus ring, the highlighted option's margin, and the level meter.
-- No green or red for options, gains, costs or outcomes. Outcomes are words
-  ("kept", "changed", "dropped"), and no meaning is carried by colour alone.
-- Frank follows the system light or dark appearance, with no in-app theme
-  switch.
+Every text pair is 4.9:1 or better on Paper and on Pond in both themes;
+ink on duck is 8.4:1. Frank follows the system light or dark appearance.
 
 ### 8.3 Typography
 
-| Role | Face | Why |
+One family, **Recursive** (OFL, bundled), where the style says who's
+speaking:
+
+| Voice | Setting | Used for |
 | --- | --- | --- |
-| Interface and Frank's words | System UI (SF Pro, Segoe UI Variable, Cantarell) | Native, instant, and it matches the menu bar it lives in |
-| Plans and code | Monaspace Neon | A developer's monospace, made by GitHub Next and OFL-licensed. Plan text reads as it did in the terminal. |
-| Frank's marks | Monaspace Radon | The handwritten member of the same family: margin notes in the same hand as the code, so it feels like one voice |
+| Frank | Casual (`CASL 1`) | The gist, a call's question, what it comes down to, his notes and replies |
+| The plan and the facts | Linear (`CASL 0`) | The plan's text, options, gains and costs, the interface |
+| Code | Mono (`MONO 1`) | File paths, identifiers, code |
+| You | Linear, italic | What you said, as heard |
 
-Scale (pt): **11** for metadata, **13** for body (the macOS default),
-**15** for the plan title and a call's question, and **18** for first-run
-headings only. Line height is 1.45 for body text and 1.35 for monospace.
-Lines stay under 64 characters inside the panel. Weights are regular and
-semibold only.
-
-Radon is used for call numbers, option numbers, the `+` and `−` gain and
-cost marks, and margin notes of three words or fewer ("the plan", "code
-disagrees"). Anything longer is Frank talking, and uses the system face.
+Scale (px): **11** for metadata, **13** for body, **15** for titles and
+option labels, **18** for the gist and a call's question. Line height is
+1.45. Weights are regular and semibold only.
 
 ### 8.4 Space, shape, depth
 

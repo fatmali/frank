@@ -1,29 +1,34 @@
 /*
- * Frank's design tokens (docs/ux.md §6). Components use these and nothing
+ * Frank's design tokens (docs/ux-redesign.md §6.3). Components use these and nothing
  * else: no colour, font, size, radius or duration is written anywhere else.
  */
 :root {
   color-scheme: light dark;
 
-  /* Colour. Pond-water neutrals; duck amber is ink, never a filled area;
-     bill orange means one thing only: the code contradicts the plan. */
-  --surface: #fbfcfb;
-  --surface-sunk: #f1f4f2;
-  --ink: #1c2421;
-  --ink-muted: #5b6863;
-  --rule: #dce2df;
-  --duck: #e8a317;
-  --duck-ink: #8a5d00;
-  --bill: #c2410c;
+  /* Colour, from a rubber duck in water (docs/ux-redesign.md §6.3). Each
+     has one job. Duck is Frank: what he's looking at and saying, and what
+     he'd pick; it never carries text (duck-ink does). Bill means one thing:
+     the code disagrees with the plan. Reed is decided. */
+  --surface: #fbfcfb; /* Paper: the plan, and what sits on it */
+  --surface-sunk: #e9f0ee; /* Pond: the ground */
+  --ink: #16302b;
+  --ink-muted: #4e6460;
+  --rule: #d3dfdb;
+  --duck: #f2c230;
+  --duck-ink: #7a5c00;
+  --bill: #b83d0a;
+  --reed: #276b4e;
   --on-ink: #fbfcfb;
 
-  /* Type. System UI for the interface and Frank's words; Monaspace Neon for
-     plans and code; Monaspace Radon for Frank's margin marks. */
+  /* Type: Recursive, one family, where the style says who's speaking.
+     Frank in Casual, the plan and the facts in Linear, code in Mono. */
   --font-ui:
-    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI Variable Text',
-    'Segoe UI', Cantarell, 'Helvetica Neue', sans-serif;
-  --font-code: 'Monaspace Neon', ui-monospace, 'SF Mono', Menlo, monospace;
-  --font-mark: 'Monaspace Radon', 'Monaspace Neon', ui-monospace, monospace;
+    'Recursive Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-code: 'Recursive Variable', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-mark: 'Recursive Variable', -apple-system, sans-serif;
+  --voice-plan: 'CASL' 0, 'MONO' 0;
+  --voice-frank: 'CASL' 1, 'MONO' 0;
+  --voice-code: 'CASL' 0, 'MONO' 1;
   --text-meta: 11px;
   --text-code: 12px;
   --text-body: 13px;
@@ -42,7 +47,9 @@
   --space-6: 24px;
   --row: 36px;
   --margin-col: 28px;
-  --panel-width: 480px;
+  /* Where the duck sits, left of the plan. */
+  --duck-col: 30px;
+  --panel-width: 520px;
 
   /* Shape. The panel takes the OS popover radius; insets are 6; the rest is square. */
   --radius-panel: 12px;
@@ -60,29 +67,36 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --surface: #1b2421;
-    --surface-sunk: #151d1a;
-    --ink: #e6ece9;
-    --ink-muted: #98a6a0;
-    --rule: #2c3833;
-    --duck: #f2b53a;
-    --duck-ink: #f2b53a;
-    --bill: #f0763b;
-    --on-ink: #1b2421;
+    --surface: #1a3f3b;
+    --surface-sunk: #123330;
+    --ink: #e4eeeb;
+    --ink-muted: #a7bdb8;
+    --rule: #2b524d;
+    --duck: #f2c230;
+    --duck-ink: #f2c230;
+    --bill: #ff8a57;
+    --reed: #6cc49a;
+    --on-ink: #123330;
     color-scheme: dark;
   }
 }
 
+/* The three voices, set by the type itself. */
+body {
+  font-variation-settings: var(--voice-plan);
+}
+
 /* An explicit theme choice, where the host sets one. */
 :root[data-theme='dark'] {
-  --surface: #1b2421;
-  --surface-sunk: #151d1a;
-  --ink: #e6ece9;
-  --ink-muted: #98a6a0;
-  --rule: #2c3833;
-  --duck: #f2b53a;
-  --duck-ink: #f2b53a;
-  --bill: #f0763b;
-  --on-ink: #1b2421;
+  --surface: #1a3f3b;
+  --surface-sunk: #123330;
+  --ink: #e4eeeb;
+  --ink-muted: #a7bdb8;
+  --rule: #2b524d;
+  --duck: #f2c230;
+  --duck-ink: #f2c230;
+  --bill: #ff8a57;
+  --reed: #6cc49a;
+  --on-ink: #123330;
   color-scheme: dark;
 }

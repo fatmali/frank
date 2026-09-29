@@ -1,72 +1,50 @@
-import type { CSSProperties } from 'react';
-import { plainQuote, readLabel, sizeOfIt } from '../format.ts';
+import { useMemo } from 'react';
+import { sizeOfIt } from '../format.ts';
 import { Inline } from '../Markdown.tsx';
+import { planLines } from '../planLines.ts';
 import { Conversation } from './Conversation.tsx';
+import { MarginDuck } from './MarginDuck.tsx';
+import { PlanText } from './PlanText.tsx';
 import { useController, usePanel } from './store.ts';
 
-/** The read: what the plan does, what needs the developer, and what's fine. */
+/**
+ * The read: what the plan does in Frank's words, then the plan itself with
+ * his marks on it, and what he found fine (docs/ux-redesign.md §6.1).
+ */
 export function TheRead() {
   const c = useController();
-  const { gist, calls, fine, reading, marking, speakingAbout } = usePanel();
+  const { gist, calls, fine, reading, plan, speakingAbout } = usePanel();
+  const lines = useMemo(() => {
+    if (!plan) return [];
+    const all = planLines(plan.body, calls);
+    // The plan's title is in the header already.
+    const first = all[0];
+    return first?.kind === 'heading' &&
+      first.segments
+        .map((s) => s.text)
+        .join('')
+        .trim() === plan.title
+      ? all.slice(1)
+      : all;
+  }, [plan, calls]);
+  const current = speakingAbout?.startsWith('call:') ? speakingAbout.slice(5) : undefined;
   return (
     <section className="the-read" aria-label="Frank's read of the plan">
-      {gist ? (
-        <p className={speakingAbout === 'plan' ? 'gist speaking' : 'gist'}>
-          <Inline text={gist} />
-        </p>
-      ) : (
-        <p className="gist quiet">Reading the plan</p>
-      )}
+      <MarginDuck fallback="plan" />
+      <p className={gist ? 'gist' : 'gist quiet'} data-anchor="plan">
+        {gist ? <Inline text={gist} /> : 'Reading the plan'}
+      </p>
       <p className={reading && !calls.length ? 'size working' : 'size'} role="status">
         {sizeOfIt(calls.length, reading)}
       </p>
-      {calls.length > 0 && (
-        <ol className={marking ? 'read-calls marking' : 'read-calls'}>
-          {calls.map((call, i) => (
-            <li
-              key={call.id}
-              style={{ '--i': i } as CSSProperties}
-              className={speakingAbout === `call:${call.id}` ? 'speaking' : undefined}
-            >
-              <button
-                className="read-call"
-                disabled={reading}
-                onClick={() => c.show(call.id)}
-                data-made={call.outcome?.verdict}
-              >
-                <span className="call-number" aria-hidden="true">
-                  {call.id}
-                </span>
-                <span className="call-question">
-                  <Inline text={call.question} />
-                </span>
-                <span
-                  className={
-                    call.contradicted && !call.outcome
-                      ? 'call-status margin-note flagged'
-                      : 'call-status'
-                  }
-                >
-                  {readLabel(call)}
-                </span>
-                {call.planQuote && (
-                  <q className="plan-quote">
-                    <span className="underline">{plainQuote(call.planQuote)}</span>
-                  </q>
-                )}
-              </button>
-            </li>
-          ))}
-        </ol>
-      )}
-      {reading && calls.length > 0 && <p className="quiet more">Looking for more</p>}
+      <PlanText
+        lines={lines}
+        calls={calls}
+        current={current}
+        {...(reading ? {} : { onOpen: (id: string) => c.show(id) })}
+      />
       {!reading && fine.length > 0 && (
-        <section className="fine" aria-label="Checked and fine">
-          <h2>Checked and fine</h2>
-          <p>
-            <Inline text={fine.map((f) => f.replace(/\.?$/, '.')).join(' ')} />
-          </p>
-        </section>
+        <p className="fine-line">Checked and fine: {fine.join('; ')}.</p>
       )}
       <Conversation callId={undefined} />
     </section>

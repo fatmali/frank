@@ -140,6 +140,10 @@ export interface PanelState {
   typing: boolean;
   /** What kind of turn the developer has now, for the voice bar. */
   turnKind: Patience | undefined;
+  /** The last thing the developer said out loud, as heard. */
+  lastHeard: string | undefined;
+  /** The last thing Frank said out loud. */
+  lastLine: string | undefined;
   /** What went wrong with voice, in words the developer can act on. */
   voiceError: string | undefined;
 }
@@ -199,6 +203,8 @@ export class PanelController {
     speakingAbout: undefined,
     typing: false,
     turnKind: undefined,
+    lastHeard: undefined,
+    lastLine: undefined,
     voiceError: undefined,
   };
   private listeners = new Set<() => void>();
@@ -343,7 +349,10 @@ export class PanelController {
     const said = lines.filter((l) => l.text.trim());
     if (!said.length) return;
     this.lastSaid = said;
-    this.set({ voice: { state: 'speaking' } });
+    this.set({
+      voice: { state: 'speaking' },
+      lastLine: said.map((l) => l.text).join(' '),
+    });
     for (const l of said) void this.host.speak(speakableProse(l.text), l.about);
   }
 
@@ -1061,6 +1070,7 @@ export class PanelController {
       this.setMood(this.restingMood());
     }
     sayReady(true);
+    if (talk && said) this.set({ lastLine: speakable(splitSuggestion(text).text) });
     // The developer's own words answered what the call comes down to.
     const heard = this.session?.heardAnswer;
     if (
@@ -1180,6 +1190,7 @@ export class PanelController {
         this.setMood('thinking');
         return;
       case 'heard':
+        if (e.text.trim()) this.set({ lastHeard: e.text.trim() });
         if (this.state.handsFree) {
           void this.send(e.text, true).finally(() => this.yourTurn());
           return;

@@ -1,125 +1,156 @@
 import type { Call } from '@frank/engine';
+import { useMemo } from 'react';
 import { outcomeWord, plainQuote, undoLabel } from '../format.ts';
 import { Inline } from '../Markdown.tsx';
+import { callExcerpt, planLines } from '../planLines.ts';
 import { Conversation, EvidenceList } from './Conversation.tsx';
 import { Kbd } from './Kbd.tsx';
+import { MarginDuck } from './MarginDuck.tsx';
+import { PlanText } from './PlanText.tsx';
 import { useController, usePanel } from './store.ts';
 
-/** One decision, everything needed to make it, nothing else (ux.md §5.2). */
+/**
+ * One call, rubber-duck style (docs/ux-redesign.md §6.1): the plan's own
+ * words for it, the receipts, then the two sides of the trade-off, with each
+ * answer to what it comes down to under the side it leads to.
+ */
 export function CallView() {
-  const c = useController();
-  const { calls, selected, gathered, answers, highlight, streaming, speakingAbout } =
-    usePanel();
+  const { calls, selected, gathered, highlight, plan } = usePanel();
   const call = calls.find((x) => x.id === selected);
+  const lines = useMemo(() => (plan ? planLines(plan.body, calls) : []), [plan, calls]);
   if (!call) return null;
-  const answered = answers[call.id];
-  const busy = Boolean(streaming);
+  const excerpt = callExcerpt(lines, call.id);
   return (
     <section
       className="call-view"
       key={call.id}
       aria-label={`Call ${call.id} of ${calls.length}`}
     >
-      <header
-        className={
-          speakingAbout === `call:${call.id}` ? 'call-head speaking' : 'call-head'
-        }
-      >
+      <MarginDuck fallback={`call:${call.id}`} />
+      <header className="call-head">
         <ProgressRail calls={calls} current={call.id} />
         <h2 className="question">
           <Inline text={call.question} />
         </h2>
       </header>
-      {call.planQuote && (
-        <p className="plan-said">
-          <q className="plan-quote">
-            <span className="underline">{plainQuote(call.planQuote)}</span>
-          </q>
-        </p>
+      {excerpt.length > 0 ? (
+        <div className="excerpt" data-anchor={`call:${call.id}`}>
+          <PlanText lines={excerpt} calls={calls} current={call.id} only={call.id} />
+        </div>
+      ) : (
+        call.planQuote && (
+          <p className="excerpt plain" data-anchor={`call:${call.id}`}>
+            <mark className="plan-mark current">{plainQuote(call.planQuote)}</mark>
+          </p>
+        )
       )}
-      {call.stakes && (
+      <EvidenceList call={call} files={gathered?.files ?? []} />
+      {call.options.length === 0 && call.stakes && (
         <p className="stakes">
           <Inline text={call.stakes} />
         </p>
       )}
+      <Sides call={call} />
+      {highlight && <Pointer call={call} option={highlight.option} why={highlight.why} />}
+      <Conversation callId={call.id} />
+    </section>
+  );
+}
 
-      {call.options.length > 0 && (
-        <ol className="options" aria-label="Options">
-          {call.options.map((o, i) => {
-            const n = i + 1;
-            const chosen =
-              (n === 1 && call.outcome?.verdict === 'keep') ||
-              (call.outcome?.verdict === 'change' && call.outcome.option === n);
-            return (
-              <li key={n}>
-                <button
-                  className="option"
-                  data-lit={highlight?.option === n || undefined}
-                  aria-pressed={chosen}
-                  disabled={busy}
-                  aria-label={`Option ${n} of ${call.options.length}, ${o.label}${n === 1 ? ', the plan' : ''}. ${o.gain ? `Gain: ${o.gain}. ` : ''}${o.cost ? `Cost: ${o.cost}.` : ''}`}
-                  onClick={() => c.choose(n)}
-                >
-                  <span className="option-number" aria-hidden="true">
-                    {n}
-                  </span>
-                  <span className="option-label">
-                    <Inline text={o.label} />
-                  </span>
-                  <span className="margin-note">
-                    {chosen ? 'chosen' : n === 1 ? 'the plan' : ''}
-                  </span>
-                  {o.gain && (
-                    <span className="trade">
-                      <span className="sign" aria-hidden="true">
-                        +
-                      </span>
-                      <Inline text={o.gain} />
-                    </span>
-                  )}
-                  {o.cost && (
-                    <span className="trade">
-                      <span className="sign" aria-hidden="true">
-                        −
-                      </span>
-                      <Inline text={o.cost} />
-                    </span>
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ol>
-      )}
-
+/**
+ * The trade-off: the plan's choice and the alternative side by side, what
+ * each buys and costs, and what it comes down to, with each answer under the
+ * side it leads to. A third option sits under them as one line.
+ */
+function Sides({ call }: { call: Call }) {
+  const c = useController();
+  const { answers, highlight, streaming } = usePanel();
+  const busy = Boolean(streaming);
+  const answered = answers[call.id];
+  const shown = call.options.slice(0, 2);
+  const extra = call.options.slice(2);
+  if (!shown.length) return null;
+  const chosen = (n: number) =>
+    (n === 1 && call.outcome?.verdict === 'keep') ||
+    (call.outcome?.verdict === 'change' && call.outcome.option === n);
+  const side = (n: number) => {
+    const o = call.options[n - 1]!;
+    return (
+      <button
+        key={n}
+        className="side"
+        data-lit={highlight?.option === n || undefined}
+        aria-pressed={chosen(n)}
+        disabled={busy}
+        aria-label={`${n === 1 ? 'The plan' : 'Instead'}: ${o.label}. ${o.gain ? `Gains ${o.gain}. ` : ''}${o.cost ? `Costs ${o.cost}.` : ''}`}
+        onClick={() => c.choose(n)}
+      >
+        <span className="side-whose">
+          {chosen(n) ? 'chosen' : n === 1 ? 'The plan' : 'Instead'}
+        </span>
+        <span className="side-label">
+          <Inline text={o.label} />
+        </span>
+        {o.gain && (
+          <span className="trade gain">
+            <span className="sign" aria-hidden="true">
+              +
+            </span>
+            <Inline text={o.gain} />
+          </span>
+        )}
+        {o.cost && (
+          <span className="trade cost">
+            <span className="sign" aria-hidden="true">
+              −
+            </span>
+            <Inline text={o.cost} />
+          </span>
+        )}
+      </button>
+    );
+  };
+  return (
+    <section className="sides" aria-label="The trade-off" data-count={shown.length}>
+      <div className="side-row">{shown.map((_, i) => side(i + 1))}</div>
+      {extra.map((o, i) => (
+        <button
+          key={o.label}
+          className="side-extra"
+          aria-pressed={chosen(i + 3)}
+          disabled={busy}
+          onClick={() => c.choose(i + 3)}
+        >
+          Also possible: <strong>{o.label}</strong>
+          {o.gain ? `, ${o.gain}` : ''}
+          {o.cost ? `, but ${o.cost}` : ''}
+        </button>
+      ))}
       {call.hinge && (
-        <section className="hinge" aria-label="It comes down to">
-          <p>
-            <span className="hinge-label">It comes down to:</span>{' '}
-            <Inline text={call.hinge.question} />
+        <div className="hinge">
+          <p className="hinge-question">
+            It comes down to: <Inline text={call.hinge.question} />
           </p>
-          <div className="answers">
-            {call.hinge.answers.map((a, i) => (
-              <button
-                key={i}
-                className="button"
-                aria-pressed={answered === i}
-                onClick={() => c.answer(i)}
-              >
-                <Kbd>{'ABC'[i]!}</Kbd> {a.answer}
-                <span className="leads">
-                  leads to {call.options[a.option - 1]?.label ?? a.option}
-                </span>
-              </button>
+          <div className="side-row side-answers">
+            {shown.map((_, col) => (
+              <div key={col} className="answer-col">
+                {call.hinge!.answers.map((a, i) =>
+                  a.option === col + 1 ? (
+                    <button
+                      key={i}
+                      className="answer"
+                      aria-pressed={answered === i}
+                      onClick={() => c.answer(i)}
+                    >
+                      <Kbd>{'ABC'[i]!}</Kbd> {a.answer}
+                    </button>
+                  ) : null,
+                )}
+              </div>
             ))}
           </div>
-        </section>
+        </div>
       )}
-
-      {highlight && <Pointer call={call} option={highlight.option} why={highlight.why} />}
-
-      <EvidenceList call={call} files={gathered?.files ?? []} />
-      <Conversation callId={call.id} />
     </section>
   );
 }

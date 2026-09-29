@@ -1,9 +1,13 @@
 # UX redesign: rubber ducking the agent's plan
 
 Status: in progress. Built: the plans home, the shorter briefing, "walk me
-through it" with answers heard in your explanation, the new commands, and
-patience per turn. Building now: the screen (§6). Once done, this folds into
-ux.md §5 to §8, and this file goes.
+through it" with answers heard in your explanation, the new commands,
+patience per turn, and the screen (§6): the plan as the surface with marks
+and margin notes, a call's excerpt and its two sides, the duck in the
+margin, the last words said, and the colours and type (now in ux.md §8).
+Still to come: following along with live transcripts (D6, D7), decision
+dependencies and reasons in the note (D2 to D4). Once done, this folds into
+ux.md §5 to §7, and this file goes.
 
 ## 1. What rubber ducking is, and what that means for Frank
 

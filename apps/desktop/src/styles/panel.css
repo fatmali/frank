@@ -309,11 +309,8 @@ select {
   padding: 0 var(--space-4) 0 calc(var(--space-4) + var(--margin-col) + var(--space-2));
   font-size: var(--text-meta);
 }
-
 /* ---------------------------------------------------------------- shared marks */
-
-.call-number,
-.option-number {
+.call-number {
   font-family: var(--font-mark);
   font-size: var(--text-title);
   line-height: 1;
@@ -329,20 +326,6 @@ select {
 
 .margin-note.flagged {
   color: var(--bill);
-}
-
-.plan-quote {
-  font-family: var(--font-code);
-  font-size: var(--text-code);
-  line-height: var(--leading-code);
-  color: var(--ink-muted);
-  quotes: none;
-}
-
-/* Frank's mark: an amber underline under the plan's own words. */
-.plan-quote .underline {
-  padding-bottom: 1px;
-  background: linear-gradient(var(--duck), var(--duck)) no-repeat left bottom / 100% 1.5px;
 }
 
 .kbd + * {
@@ -371,15 +354,11 @@ select {
   margin-top: var(--space-3);
   font-weight: var(--weight-strong);
 }
-
-.read-calls,
 .decisions {
   margin: var(--space-2) 0 0;
   padding: 0;
   list-style: none;
 }
-
-.read-call,
 .decision {
   display: grid;
   grid-template-columns: var(--margin-col) 1fr auto;
@@ -393,52 +372,21 @@ select {
   text-align: left;
   cursor: pointer;
 }
-
-.read-calls li:last-child .read-call,
 .decisions li:last-child .decision {
   border-bottom: 0;
 }
-
-.read-call:hover:not(:disabled),
 .decision:hover {
   box-shadow: inset 2px 0 var(--duck);
-}
-
-.read-call:disabled {
-  cursor: default;
 }
 
 .call-question,
 .decision-title {
   font-weight: var(--weight-strong);
 }
-
-.read-call[data-made] .call-question {
-  font-weight: var(--weight-regular);
-  color: var(--ink-muted);
-}
-
-.call-status,
 .decision-outcome {
   font-size: var(--text-meta);
   color: var(--ink-muted);
   white-space: nowrap;
-}
-
-.read-call .plan-quote {
-  grid-column: 2 / -1;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-/* The one orchestrated moment: Frank marks the plan as each call arrives. */
-.read-calls.marking li:last-child .call-number {
-  animation: mark-in var(--t-mark) var(--ease) both;
-}
-
-.read-calls.marking li:last-child .plan-quote .underline {
-  animation: underline var(--t-mark) var(--ease) 40ms both;
 }
 
 @keyframes mark-in {
@@ -558,53 +506,9 @@ select {
   line-height: 1.35;
 }
 
-.plan-said {
-  margin-top: var(--space-1);
-}
-
 .stakes {
   margin-top: var(--space-3);
   max-width: 60ch;
-}
-
-.options {
-  margin: var(--space-4) 0 0;
-  padding: 0;
-  list-style: none;
-  border-top: var(--hairline) solid var(--rule);
-}
-
-.option {
-  display: grid;
-  grid-template-columns: var(--margin-col) 1fr auto;
-  gap: 2px var(--space-2);
-  align-items: baseline;
-  width: 100%;
-  padding: var(--space-2) var(--space-2) var(--space-2) 0;
-  border: 0;
-  border-bottom: var(--hairline) solid var(--rule);
-  background: none;
-  text-align: left;
-  cursor: pointer;
-}
-
-.option:hover:not(:disabled),
-.option[data-lit] {
-  box-shadow: inset 2px 0 var(--duck);
-  background: var(--surface-sunk);
-}
-
-.option[data-lit] .option-number,
-.option[aria-pressed='true'] .option-number {
-  color: var(--duck-ink);
-}
-
-.option-number {
-  padding-left: var(--space-2);
-}
-
-.option-label {
-  font-weight: var(--weight-strong);
 }
 
 .trade {
@@ -621,23 +525,6 @@ select {
 
 .hinge {
   margin-top: var(--space-4);
-}
-
-.hinge-label {
-  font-weight: var(--weight-strong);
-}
-
-.answers {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-top: var(--space-2);
-}
-
-.answers .leads {
-  font-weight: var(--weight-regular);
-  font-size: var(--text-meta);
-  color: var(--ink-muted);
 }
 
 .pointer {
@@ -733,6 +620,376 @@ select {
 .copy-path {
   margin: 0 0 var(--space-2) var(--space-3);
   font-size: var(--text-meta);
+}
+
+/* ---------------------------------------------------------------- the plan, marked */
+
+/* The read and a call scroll; the duck sits in their margin. */
+.the-read,
+.call-view {
+  position: relative;
+  padding-left: calc(var(--space-4) + var(--duck-col));
+}
+
+.gist {
+  font-variation-settings: var(--voice-frank);
+  font-size: var(--text-heading);
+  line-height: 1.35;
+}
+
+.plan-text {
+  margin-top: var(--space-3);
+  padding: var(--space-3) 0;
+  border-radius: var(--radius-inset);
+  background: var(--surface);
+  box-shadow: 0 0 0 var(--hairline) var(--rule);
+}
+
+.plan-line {
+  display: grid;
+  grid-template-columns: var(--margin-col) minmax(0, 1fr) auto;
+  column-gap: var(--space-2);
+  align-items: baseline;
+  padding: 1px var(--space-3) 1px 0;
+  line-height: var(--leading-body);
+}
+
+.plan-line.blank {
+  height: var(--space-2);
+}
+
+.plan-line.heading {
+  margin-top: var(--space-2);
+  font-weight: var(--weight-strong);
+}
+
+.plan-line.heading[data-level='1'] {
+  margin-top: 0;
+  font-size: var(--text-title);
+}
+
+.plan-line.code .plan-words {
+  font-variation-settings: var(--voice-code);
+  font-size: var(--text-code);
+  white-space: pre-wrap;
+}
+
+.plan-gutter {
+  font-variation-settings: var(--voice-frank);
+  font-weight: var(--weight-strong);
+  color: var(--duck-ink);
+  text-align: right;
+}
+
+.plan-marker {
+  margin-right: 0.5ch;
+  color: var(--ink-muted);
+}
+
+.plan-words code {
+  font-variation-settings: var(--voice-code);
+  font-size: 0.95em;
+}
+
+/* Frank's mark: the plan's own words for a call, underlined in duck. */
+.plan-mark {
+  padding: 0 0 1px;
+  border: 0;
+  background: linear-gradient(var(--duck), var(--duck)) no-repeat left bottom / 100% 2px;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+mark.plan-mark {
+  cursor: default;
+}
+
+.plan-mark.flagged {
+  background-image: linear-gradient(var(--bill), var(--bill));
+}
+
+.plan-mark.made {
+  background-image: linear-gradient(var(--reed), var(--reed));
+}
+
+.plan-mark.current {
+  background: color-mix(in srgb, var(--duck) 30%, transparent);
+  box-shadow: 0 2px 0 var(--duck);
+}
+
+.plan-note {
+  font-variation-settings: var(--voice-frank);
+  font-size: var(--text-meta);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.plan-note.flagged {
+  color: var(--bill);
+}
+
+.plan-note.made {
+  color: var(--reed);
+}
+
+.fine-line {
+  margin-top: var(--space-3);
+  font-size: var(--text-meta);
+  color: var(--ink-muted);
+}
+
+/* ---------------------------------------------------------------- the duck in the margin */
+
+.margin-duck {
+  position: absolute;
+  left: var(--space-2);
+  width: 30px;
+  height: 30px;
+  transition:
+    top 220ms var(--ease),
+    opacity var(--t-note) var(--ease);
+  transform-origin: 50% 90%;
+  pointer-events: none;
+}
+
+.margin-duck svg {
+  display: block;
+}
+
+/* Listening: nodding with your voice. */
+.margin-duck.listening {
+  transform: translateY(calc(var(--level) * -5px)) rotate(calc(var(--level) * 8deg));
+  transition:
+    top 220ms var(--ease),
+    transform 80ms linear;
+}
+
+/* Talking: a small rock, as if the bill moves. */
+.margin-duck.talking {
+  animation: duck-talk 0.36s ease-in-out infinite alternate;
+}
+
+@keyframes duck-talk {
+  from {
+    transform: rotate(-4deg);
+  }
+  to {
+    transform: rotate(3deg);
+  }
+}
+
+/* Thinking: eyes on the plan, one slow blink. */
+.margin-duck.thinking .eye {
+  animation: duck-blink 2.4s ease-in-out infinite;
+  transform-origin: 18.6px 11.1px;
+}
+
+@keyframes duck-blink {
+  0%,
+  90%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .margin-duck,
+  .margin-duck.listening {
+    animation: none;
+    transform: none;
+    transition: opacity var(--t-note) var(--ease);
+  }
+  .margin-duck.thinking .eye {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------- a call's two sides */
+
+.call-view .question {
+  font-variation-settings: var(--voice-frank);
+  font-size: var(--text-heading);
+}
+
+.excerpt {
+  margin-top: var(--space-3);
+}
+
+.excerpt .plan-text {
+  margin-top: 0;
+}
+
+.excerpt.plain {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-inset);
+  background: var(--surface);
+}
+
+.sides {
+  margin-top: var(--space-4);
+}
+
+.side-row {
+  display: grid;
+  grid-template-columns: repeat(var(--sides, 2), minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.sides[data-count='1'] {
+  --sides: 1;
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-3);
+  border: var(--hairline) solid var(--rule);
+  border-radius: var(--radius-inset);
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.side:hover:not(:disabled),
+.side[data-lit] {
+  border-color: var(--duck);
+  box-shadow: inset 0 3px 0 var(--duck);
+}
+
+.side[aria-pressed='true'] {
+  border-color: var(--reed);
+  box-shadow: inset 0 3px 0 var(--reed);
+}
+
+.side-whose {
+  font-variation-settings: var(--voice-frank);
+  font-size: var(--text-meta);
+  color: var(--ink-muted);
+}
+
+.side[aria-pressed='true'] .side-whose {
+  color: var(--reed);
+}
+
+.side-label {
+  font-size: var(--text-title);
+  font-weight: var(--weight-strong);
+}
+
+.trade {
+  display: flex;
+  gap: 0.5ch;
+  color: var(--ink-muted);
+}
+
+.trade .sign {
+  width: 1.2ch;
+  color: var(--ink);
+}
+
+.side-extra {
+  display: block;
+  width: 100%;
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  background: none;
+  color: var(--ink-muted);
+  text-align: left;
+  cursor: pointer;
+}
+
+.hinge {
+  margin-top: var(--space-3);
+}
+
+.hinge-question {
+  font-variation-settings: var(--voice-frank);
+  text-align: center;
+}
+
+.side-answers {
+  margin-top: var(--space-2);
+}
+
+.answer-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.answer {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border: var(--hairline) solid var(--rule);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.answer[aria-pressed='true'] {
+  border-color: var(--duck);
+  background: color-mix(in srgb, var(--duck) 25%, var(--surface));
+}
+
+.pointer {
+  font-variation-settings: var(--voice-frank);
+}
+
+/* ---------------------------------------------------------------- what was just said */
+
+.said {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: var(--space-2);
+  font-size: var(--text-meta);
+}
+
+.said p {
+  display: flex;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.said .who {
+  flex: none;
+  width: 3.5em;
+  color: var(--ink-muted);
+}
+
+.said .words {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.said-you .words {
+  font-style: italic;
+}
+
+.said-frank .words {
+  font-variation-settings: var(--voice-frank);
+}
+
+/* Frank's words in the conversation, in his voice; yours in italic. */
+.turn.frank .words {
+  font-variation-settings: var(--voice-frank);
+}
+
+.turn.user .words {
+  font-style: italic;
 }
 
 /* ---------------------------------------------------------------- conversation */
@@ -924,17 +1181,13 @@ select {
   border-radius: 50%;
   border: 1.5px solid var(--ink-muted);
 }
-
 /* The call or sentence Frank is talking about, as he says it. */
-.gist,
-.read-calls li {
+.gist {
   transition:
     box-shadow var(--t-note) var(--ease),
     background var(--t-note) var(--ease);
 }
-
 .gist.speaking,
-.read-calls li.speaking,
 .call-head.speaking {
   box-shadow: -8px 0 0 -5px var(--duck);
   background: var(--surface-sunk);

@@ -103,6 +103,8 @@ export const Composer = forwardRef<ComposerHandle>(function Composer(_, ref) {
     typing,
     turnKind,
     history,
+    lastHeard,
+    lastLine,
   } = usePanel();
   const [text, setText] = useState('');
   const input = useRef<HTMLTextAreaElement>(null);
@@ -217,6 +219,22 @@ export const Composer = forwardRef<ComposerHandle>(function Composer(_, ref) {
                 : 'Tap Space to talk';
     return (
       <div className="composer voice-bar-wrap">
+        {(lastHeard || lastLine) && (
+          <div className="said" aria-live="off">
+            {lastHeard && (
+              <p className="said-you">
+                <span className="who">You</span>{' '}
+                <span className="words">{lastHeard}</span>
+              </p>
+            )}
+            {lastLine && (
+              <p className="said-frank">
+                <span className="who">Frank</span>{' '}
+                <span className="words">{lastLine}</span>
+              </p>
+            )}
+          </div>
+        )}
         {voiceError && <p className="composer-hint error">{voiceError}</p>}
         {packs && !packs.voices.installed && (
           <p className="composer-hint">
