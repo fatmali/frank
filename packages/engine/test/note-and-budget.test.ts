@@ -9,6 +9,7 @@ const base: Call = {
   title: 'Drop the sessions table',
   question: 'Should the sessions table go now?',
   stakes: '',
+  spoken: '',
   kind: 'silent-choice',
   planQuote: '',
   planChoice: 'Drops the sessions table in a new migration',

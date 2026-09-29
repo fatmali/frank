@@ -1,7 +1,7 @@
 /**
  * Frank's silhouette: a duck's head and chest, facing right, on a 36×36 grid.
  * The single source for the menu bar icons, sticky Frank, the app icon and
- * the panel (docs/ux.md §6.5).
+ * the panel (docs/ux.md §8.5).
  */
 
 export type Mood = 'idle' | 'listening' | 'thinking' | 'judging' | 'done';

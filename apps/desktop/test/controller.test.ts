@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PanelController, speakable, spokenSentences } from '../src/controller.ts';
-import { demoHost } from '../src/demo.ts';
+import { DEMO_SCRIPT, demoHost } from '../src/demo.ts';
 import { BrainFailure } from '../src/host.ts';
 
 async function settle(c: PanelController, until: (c: PanelController) => boolean) {
@@ -34,7 +34,7 @@ describe('the read', () => {
     expect(s.view.name).toBe('read');
     expect(s.reading).toBe(false);
     expect(s.gist).toMatch(/^Adds a per-key limit/);
-    expect(s.fine).toContain('429 with a Retry-After header');
+    expect(s.fine).toContain('the 429 response and its Retry-After header');
     expect(s.calls.map((x) => x.question)).toEqual([
       'Where should the counters live?',
       'Should /health be rate limited?',
@@ -133,7 +133,10 @@ describe('one call at a time', () => {
 
 describe('talking to Frank', () => {
   it('turns a spoken command into an action, without asking the brain', async () => {
-    const { host, c } = await startSession({ utterances: ['no', 'take it'] });
+    const { host, c } = await startSession({
+      mode: 'chat',
+      utterances: ['no', 'take it'],
+    });
     c.beginCalls();
     await c.startTalking();
     expect(c.getSnapshot().voice).toMatchObject({ state: 'listening' });
@@ -147,7 +150,10 @@ describe('talking to Frank', () => {
   });
 
   it('answers a spoken question out loud, briefly', async () => {
-    const { host, c } = await startSession({ utterances: ['What would you do?'] });
+    const { host, c } = await startSession({
+      mode: 'chat',
+      utterances: ['What would you do?'],
+    });
     c.beginCalls();
     await c.startTalking();
     await c.stopTalking();
@@ -161,7 +167,7 @@ describe('talking to Frank', () => {
   });
 
   it('keeps typed questions quiet', async () => {
-    const { host, c } = await startSession();
+    const { host, c } = await startSession({ mode: 'chat' });
     c.beginCalls();
     await c.send('Why not Redis?');
     expect(c.getSnapshot().turns).toHaveLength(2);
@@ -169,7 +175,7 @@ describe('talking to Frank', () => {
   });
 
   it('asks before downloading the speech models', async () => {
-    const { c } = await startSession({ voiceModel: false });
+    const { c } = await startSession({ mode: 'chat', voiceModel: false });
     c.beginCalls();
     await c.startTalking();
     expect(c.getSnapshot().voice).toEqual({
@@ -186,7 +192,7 @@ describe('talking to Frank', () => {
   });
 
   it('says what to say when it heard nothing', async () => {
-    const { c } = await startSession({ utterances: [''] });
+    const { c } = await startSession({ mode: 'chat', utterances: [''] });
     c.beginCalls();
     await c.startTalking();
     await c.stopTalking();
@@ -197,7 +203,10 @@ describe('talking to Frank', () => {
   });
 
   it('keeps spoken answers short, and typed ones as they were', async () => {
-    const { host, c } = await startSession({ utterances: ['Why not Redis?'] });
+    const { host, c } = await startSession({
+      mode: 'chat',
+      utterances: ['Why not Redis?'],
+    });
     c.beginCalls();
     await c.startTalking();
     await c.stopTalking();
@@ -300,7 +309,7 @@ describe('around the session', () => {
   });
 
   it('Esc backs out of something else before closing', async () => {
-    const { host, c } = await startSession();
+    const { host, c } = await startSession({ mode: 'chat' });
     c.beginCalls();
     c.somethingElse();
     await c.close();
@@ -316,7 +325,10 @@ describe('talking freely', () => {
     host.calls.filter((x) => x.startsWith('speak')).length;
 
   it('hears a thought, answers out loud, then listens again', async () => {
-    const { host, c } = await startSession({ utterances: ['What would you do?'] });
+    const { host, c } = await startSession({
+      mode: 'chat',
+      utterances: ['What would you do?'],
+    });
     c.beginCalls();
     await c.toggleHandsFree();
     await settle(c, (x) => x.getSnapshot().turns.length === 2);
@@ -330,7 +342,10 @@ describe('talking freely', () => {
   });
 
   it('acts on a command and listens again straight away', async () => {
-    const { host, c } = await startSession({ utterances: ['no', 'take it'] });
+    const { host, c } = await startSession({
+      mode: 'chat',
+      utterances: ['no', 'take it'],
+    });
     c.beginCalls();
     await c.toggleHandsFree();
     await settle(c, (x) => x.getSnapshot().selected === '2');
@@ -380,3 +395,136 @@ describe("Frank's voice", () => {
     expect(host.calls).not.toContain('hide');
   });
 });
+
+describe('voice first', () => {
+  const said = (host: { calls: string[] }) =>
+    host.calls.filter((x) => x.startsWith('speak ')).map((x) => x.slice(6));
+
+  it('briefs you on the plan, then listens', async () => {
+    const { host, c } = await startSession({ utterances: [] });
+    expect(said(host)).toEqual([
+      "Claude Code's plan adds a per-key limit of 100 requests a minute to the public API, with counters kept in Redis, so one noisy key can't slow the API down for everyone.",
+      "Here's what needs you. First, where the counters live: Redis like the plan says, or in memory.",
+      'Second, whether the health check is limited: every route like the plan, or just the public API.',
+      'Third, whether two new packages are worth it, or just one.',
+      'Which one do you want to talk through? Or say go to take them in order.',
+    ]);
+    // His turn is over once he's asked; the microphone opens by itself.
+    await settle(c, (x) => x.getSnapshot().handsFree?.state === 'waiting');
+    expect(host.calls.indexOf('handsFreeStart')).toBeGreaterThan(
+      host.calls.findLastIndex((x) => x.startsWith('speak ')),
+    );
+  });
+
+  it('shows what he is talking about as he says it', async () => {
+    const { c } = await startSession({ utterances: [] });
+    const about = new Set<string>();
+    c.subscribe(() => {
+      const s = c.getSnapshot().speakingAbout;
+      if (s) about.add(s);
+    });
+    c.beginCalls();
+    await settle(c, (x) => x.getSnapshot().handsFree?.state === 'waiting');
+    expect([...about]).toContain('call:1');
+  });
+
+  it('talks a whole plan through by voice, and copies the note', async () => {
+    const { host, c } = await startSession({
+      utterances: ['the redis one', 'no', 'yes', 'keep it', 'keep it', 'yes'],
+    });
+    await settle(c, (x) => x.getSnapshot().noteCopied);
+    const s = c.getSnapshot();
+    expect(s.calls.map((x) => x.outcome)).toEqual([
+      { verdict: 'change', detail: expect.stringMatching(/in memory/), option: 2 },
+      { verdict: 'keep' },
+      { verdict: 'keep' },
+    ]);
+    expect(host.copied[0]).toMatch(/Revise the plan/);
+    const lines = said(host);
+    expect(lines).toContain('Where should the counters live?');
+    expect(lines).toContain('Then in memory. Go with that?');
+    expect(lines).toContain('Going with in memory.');
+    expect(lines).toContain(
+      "That's all three. You changed one thing: counter storage, in memory. Want me to copy the note for Claude Code?",
+    );
+    expect(lines.at(-1)).toBe('Note copied. Paste it into Claude Code.');
+    // Only questions go to the brain: the read was the only request.
+    expect(host.calls.filter((x) => x === 'stream')).toHaveLength(1);
+  });
+
+  it('the demo script talks the sample through, with a question to the brain', async () => {
+    const { host, c } = await startSession({ utterances: [...DEMO_SCRIPT] });
+    await settle(c, (x) => x.getSnapshot().noteCopied);
+    expect(c.getSnapshot().calls.map((x) => x.outcome?.verdict)).toEqual([
+      'change',
+      'change',
+      'keep',
+    ]);
+    // The read, and "what would you do?".
+    expect(host.calls.filter((x) => x === 'stream')).toHaveLength(2);
+  });
+
+  it('answers questions out loud, even typed ones', async () => {
+    const { host, c } = await startSession({ utterances: [] });
+    c.beginCalls();
+    const before = said(host).length;
+    await c.send('What would you do?');
+    await settle(c, () => said(host).length > before);
+    expect(said(host).slice(before)).toContain('In memory.');
+  });
+
+  it('Esc stops him talking, then stops listening, then closes', async () => {
+    const { host, c } = await startSession({ utterances: [] });
+    c.beginCalls();
+    expect(c.getSnapshot().voice.state).toBe('speaking');
+    await c.close();
+    expect(c.getSnapshot().voice.state).toBe('off');
+    await settle(c, (x) => x.getSnapshot().handsFree !== undefined);
+    await c.close();
+    await settle(c, (x) => x.getSnapshot().handsFree === undefined);
+    expect(host.calls).not.toContain('hide');
+    await c.close();
+    expect(host.calls).toContain('hide');
+  });
+
+  it("stays quiet until his voice is downloaded, and doesn't ask twice", async () => {
+    const { host, c } = await startSession({ naturalVoices: false, utterances: [] });
+    expect(said(host)).toEqual([]);
+    expect(c.getSnapshot().voice.state).not.toBe('needs-pack');
+    expect(c.getSnapshot().gist).toMatch(/^Adds a per-key limit/);
+  });
+
+  it('chat mode keeps to the panel', async () => {
+    const { host, c } = await startSession({ mode: 'chat', utterances: [] });
+    c.beginCalls();
+    expect(said(host)).toEqual([]);
+    expect(host.calls).not.toContain('handsFreeStart');
+  });
+});
+
+describe('first run', () => {
+  it('voice downloads what it needs in the background; chat downloads nothing', async () => {
+    const host = demoHost({ delay: 0, voiceModel: false, naturalVoices: false });
+    const c = new PanelController(host);
+    await c.start();
+    await c.chooseMode('voice');
+    expect(voiceModeOf(c)).toBe('voice');
+    await settle(c, (x) => !!x.getSnapshot().packs?.voices.installed);
+    expect(c.getSnapshot().packs?.listening.installed).toBe(true);
+    expect(host.calls.filter((x) => x.startsWith('download'))).toEqual([
+      'download listening',
+      'download voices',
+    ]);
+
+    const quiet = demoHost({ delay: 0, voiceModel: false, naturalVoices: false });
+    const q = new PanelController(quiet);
+    await q.start();
+    await q.chooseMode('chat');
+    expect(voiceModeOf(q)).toBe('chat');
+    expect(quiet.calls.filter((x) => x.startsWith('download'))).toEqual([]);
+  });
+});
+
+function voiceModeOf(c: PanelController) {
+  return c.voiceFirst ? 'voice' : 'chat';
+}

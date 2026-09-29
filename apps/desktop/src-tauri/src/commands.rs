@@ -325,6 +325,27 @@ pub fn voice_stop(app: AppHandle, voice: State<'_, Voice>) {
     voice.stop(&app);
 }
 
+/// Whether each voice pack is downloaded, and how big what's missing is.
+#[derive(serde::Serialize)]
+pub struct PackStatus {
+    installed: bool,
+    megabytes: u32,
+}
+
+#[tauri::command]
+pub fn pack_status() -> std::collections::HashMap<&'static str, PackStatus> {
+    [packs::Pack::Listening, packs::Pack::Voices]
+        .into_iter()
+        .map(|p| {
+            let status = PackStatus {
+                installed: p.installed(),
+                megabytes: p.megabytes_missing(),
+            };
+            (p.id(), status)
+        })
+        .collect()
+}
+
 /// Downloads a voice pack ("listening" or "voices"), after the developer
 /// said yes to it.
 #[tauri::command]
@@ -354,8 +375,8 @@ pub fn hands_free_stop(voice: State<'_, Voice>) {
 
 /// Adds a sentence to what Frank is saying.
 #[tauri::command]
-pub fn speak(app: AppHandle, speech: State<'_, Speech>, text: String) {
-    speech.say(&app, &text);
+pub fn speak(app: AppHandle, speech: State<'_, Speech>, text: String, id: Option<String>) {
+    speech.say(&app, &text, id);
 }
 
 #[tauri::command]
@@ -363,7 +384,7 @@ pub fn stop_speaking(speech: State<'_, Speech>) {
     speech.stop();
 }
 
-/// Every voice Frank can speak with: natural ones first, then the system's.
+/// Every voice Frank can speak with.
 #[tauri::command]
 pub async fn list_voices() -> Result<Vec<VoiceChoice>, ()> {
     Ok(tokio::task::spawn_blocking(speech::choices)

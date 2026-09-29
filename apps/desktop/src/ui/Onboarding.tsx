@@ -6,12 +6,12 @@ import { HotkeyRecorder } from './HotkeyRecorder.tsx';
 import { Kbd } from './Kbd.tsx';
 import { useController, usePanel } from './store.ts';
 
-type Step = 'brain' | 'hotkey' | 'try';
+type Step = 'brain' | 'hotkey' | 'voice' | 'try';
 
-/** First run: a brain, a hotkey, and a plan to try. Under a minute (ux.md §5.1). */
+/** First run: a brain, a hotkey, voice or chat, and a plan to try. Under a minute (ux.md §5.1). */
 export function Onboarding() {
   const c = useController();
-  const { config } = usePanel();
+  const { config, packs } = usePanel();
   const [step, setStep] = useState<Step>('brain');
   const [hotkey, setHotkey] = useState(config?.hotkey ?? 'Alt+Shift+Space');
   const [hotkeyError, setHotkeyError] = useState<string | null>(null);
@@ -19,6 +19,8 @@ export function Onboarding() {
   useEffect(() => {
     void c.host.hotkeyStatus().then(setHotkeyError);
   }, [c]);
+
+  const missing = packs ? packs.listening.megabytes + packs.voices.megabytes : 0;
 
   const record = async (accelerator: string) => {
     try {
@@ -59,8 +61,37 @@ export function Onboarding() {
             error={hotkeyError}
           />
           <div className="state-actions">
-            <button className="button primary" autoFocus onClick={() => setStep('try')}>
+            <button className="button primary" autoFocus onClick={() => setStep('voice')}>
               Continue <Kbd>↵</Kbd>
+            </button>
+          </div>
+        </>
+      )}
+      {step === 'voice' && (
+        <>
+          <p>
+            I'm best out loud. I'll tell you what each plan does and what needs you, then
+            listen while you talk it through.
+          </p>
+          {missing > 0 && (
+            <p className="quiet">
+              That takes {missing} MB of voice models, downloaded once. They run on this
+              Mac; your voice never leaves it.
+            </p>
+          )}
+          <div className="state-actions">
+            <button
+              className="text-button"
+              onClick={() => void c.chooseMode('chat').then(() => setStep('try'))}
+            >
+              I'd rather type
+            </button>
+            <button
+              className="button primary"
+              autoFocus
+              onClick={() => void c.chooseMode('voice').then(() => setStep('try'))}
+            >
+              {missing > 0 ? 'Download and talk' : 'Talk'} <Kbd>↵</Kbd>
             </button>
           </div>
         </>

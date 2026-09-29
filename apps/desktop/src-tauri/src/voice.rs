@@ -62,6 +62,10 @@ pub enum VoiceEvent {
     PackReady {
         pack: &'static str,
     },
+    /// A sentence started playing; `id` is what it's about.
+    Speaking {
+        id: String,
+    },
     /// Frank finished (or stopped) speaking.
     Spoken,
     /// Hands-free: "waiting" for you, "hearing" you, "checking" whether you've

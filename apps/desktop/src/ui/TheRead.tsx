@@ -7,11 +7,11 @@ import { useController, usePanel } from './store.ts';
 /** The read: what the plan does, what needs the developer, and what's fine. */
 export function TheRead() {
   const c = useController();
-  const { gist, calls, fine, reading, marking } = usePanel();
+  const { gist, calls, fine, reading, marking, speakingAbout } = usePanel();
   return (
     <section className="the-read" aria-label="Frank's read of the plan">
       {gist ? (
-        <p className="gist">
+        <p className={speakingAbout === 'plan' ? 'gist speaking' : 'gist'}>
           <Inline text={gist} />
         </p>
       ) : (
@@ -23,7 +23,11 @@ export function TheRead() {
       {calls.length > 0 && (
         <ol className={marking ? 'read-calls marking' : 'read-calls'}>
           {calls.map((call, i) => (
-            <li key={call.id} style={{ '--i': i } as CSSProperties}>
+            <li
+              key={call.id}
+              style={{ '--i': i } as CSSProperties}
+              className={speakingAbout === `call:${call.id}` ? 'speaking' : undefined}
+            >
               <button
                 className="read-call"
                 disabled={reading}

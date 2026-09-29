@@ -50,6 +50,7 @@ fn main() {
             commands::voice_start,
             commands::voice_stop,
             commands::download_pack,
+            commands::pack_status,
             commands::hands_free_start,
             commands::hands_free_resume,
             commands::hands_free_stop,

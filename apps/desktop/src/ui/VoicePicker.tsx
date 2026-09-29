@@ -1,65 +1,69 @@
 import { useEffect, useState } from 'react';
-import type { Config, TalkBack, VoiceChoice } from '../host.ts';
+import { voiceMode, type Config, type VoiceChoice, type VoiceMode } from '../host.ts';
 import { useController, usePanel } from './store.ts';
 
-/** The natural-voice pack, roughly (packs.rs). */
-const NATURAL_MB = 212;
-
 /**
- * Frank's voice: when he talks back, and which voice he uses. Natural voices
- * first, with their one-time download, then the macOS voices. Choosing a
- * voice says a line in it. In Settings, and in the panel (the voice button).
+ * How Frank works with you, and how he sounds: voice first or chat, and
+ * which of his voices. Choosing a voice says a line in it. In Settings, and
+ * in the panel (the voice button).
  */
 export function VoicePicker() {
   const c = useController();
-  const { config, downloads } = usePanel();
+  const { config, downloads, packs } = usePanel();
   const [voices, setVoices] = useState<VoiceChoice[]>([]);
-  const downloadingVoices = downloads.voices;
+  const downloading = downloads.voices;
   useEffect(() => {
-    // Again when the natural voices finish downloading.
-    if (downloadingVoices === undefined) void c.host.listVoices().then(setVoices);
-  }, [c, downloadingVoices]);
+    // Again when the voices finish downloading.
+    if (downloading === undefined) void c.host.listVoices().then(setVoices);
+  }, [c, downloading]);
   if (!config) return null;
-  const draft = config;
 
-  const natural = voices.filter((v) => v.kind === 'natural');
-  const system = voices.filter((v) => v.kind === 'system');
-  const naturalReady = natural.some((v) => v.installed);
-  // What speaks when nothing is chosen: the first natural voice once
-  // they're downloaded, else the best macOS voice.
-  const fallback = naturalReady ? natural[0] : system[0];
-  const chosen = draft.voice?.name || fallback?.id || '';
+  const ready = voices.some((v) => v.installed);
+  // Anything unknown, like a macOS voice from before, is his own voice.
+  const saved = config.voice?.name ?? '';
+  const chosen = voices.some((v) => v.id === saved) ? saved : (voices[0]?.id ?? '');
+  const mode = voiceMode(config);
+  const megabytes = packs?.voices.megabytes || 212;
 
   const save = async (next: Config) => {
     await c.host.saveConfig(next);
     await c.reloadConfig();
   };
+  const setMode = (m: VoiceMode) =>
+    void save({ ...config, voice: { ...config.voice, mode: m } });
   const setVoice = (name: string) =>
-    void save({ ...draft, voice: { ...draft.voice, name } }).then(() => {
-      if (name) void c.host.previewVoice(name);
+    void save({ ...config, voice: { ...config.voice, name } }).then(() => {
+      void c.host.previewVoice(name);
     });
 
   return (
     <>
-      <label className="inline-field">
-        Frank talks back
-        <select
-          value={draft.voice?.talk_back ?? 'when-spoken'}
-          onChange={(e) =>
-            void save({
-              ...draft,
-              voice: { ...draft.voice, talk_back: e.target.value as TalkBack },
-            })
-          }
-        >
-          <option value="when-spoken">when I talk to him</option>
-          <option value="always">always</option>
-          <option value="never">never</option>
-        </select>
-      </label>
+      <fieldset className="mode-picker">
+        <legend>Frank</legend>
+        <label>
+          <input
+            type="radio"
+            name="mode"
+            checked={mode === 'voice'}
+            onChange={() => setMode('voice')}
+          />
+          <span>Talks you through plans</span>
+          <span className="quiet">voice first</span>
+        </label>
+        <label>
+          <input
+            type="radio"
+            name="mode"
+            checked={mode === 'chat'}
+            onChange={() => setMode('chat')}
+          />
+          <span>Stays in the panel</span>
+          <span className="quiet">chat; he talks only when you do</span>
+        </label>
+      </fieldset>
       <fieldset className="voice-picker">
         <legend>His voice</legend>
-        {natural.map((v) => (
+        {voices.map((v) => (
           <div key={v.id} className="voice-row">
             <label>
               <input
@@ -83,58 +87,23 @@ export function VoicePicker() {
             )}
           </div>
         ))}
-        {!naturalReady &&
-          (downloadingVoices === undefined ? (
+        {!ready &&
+          (downloading === undefined ? (
             <div className="voice-download">
               <p className="quiet">
-                Natural voices run on this Mac, and sound like a person, not a screen
+                Frank's voices run on this Mac and sound like a person, not a screen
                 reader. They're a one-time download.
               </p>
               <button className="button" onClick={() => void c.downloadPack('voices')}>
-                Download natural voices, {NATURAL_MB} MB
+                Download his voice, {megabytes} MB
               </button>
             </div>
           ) : (
             <p className="voice-download quiet" role="status">
-              Downloading natural voices, {Math.round(downloadingVoices * 100)}%
-              <span
-                className="download-bar"
-                style={{ width: `${downloadingVoices * 100}%` }}
-              />
+              Downloading his voice, {Math.round(downloading * 100)}%
+              <span className="download-bar" style={{ width: `${downloading * 100}%` }} />
             </p>
           ))}
-        <div className="voice-row">
-          <label>
-            <input
-              type="radio"
-              name="voice"
-              checked={chosen.startsWith('system:')}
-              disabled={system.length === 0}
-              onChange={() => setVoice(system[0]?.id ?? '')}
-            />
-            <span>A macOS voice</span>
-          </label>
-          <select
-            aria-label="macOS voice"
-            value={chosen.startsWith('system:') ? chosen : ''}
-            onChange={(e) => setVoice(e.target.value)}
-          >
-            {!chosen.startsWith('system:') && <option value="">Choose</option>}
-            {system.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name}
-              </option>
-            ))}
-          </select>
-          {chosen.startsWith('system:') && (
-            <button
-              className="text-button"
-              onClick={() => void c.host.previewVoice(chosen)}
-            >
-              Listen
-            </button>
-          )}
-        </div>
       </fieldset>
     </>
   );

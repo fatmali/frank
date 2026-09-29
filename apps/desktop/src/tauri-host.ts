@@ -15,6 +15,7 @@ import {
   type FailureKind,
   type Gathered,
   type Host,
+  type PackStatus,
   type VoiceChoice,
   type VoiceEvent,
 } from './host.ts';
@@ -77,7 +78,8 @@ export const tauriHost: Host = {
   handsFreeResume: () => invoke('hands_free_resume'),
   handsFreeStop: () => invoke('hands_free_stop'),
   downloadPack: (pack) => invoke('download_pack', { pack }),
-  speak: (text) => invoke('speak', { text }),
+  packStatus: () => invoke<PackStatus>('pack_status'),
+  speak: (text, id) => invoke('speak', { text, id: id ?? null }),
   stopSpeaking: () => invoke('stop_speaking'),
   listVoices: () => invoke<VoiceChoice[]>('list_voices'),
   previewVoice: (id) => invoke('preview_voice', { name: id }),

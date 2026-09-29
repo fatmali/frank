@@ -8,7 +8,8 @@ import { useController, usePanel } from './store.ts';
 /** One decision, everything needed to make it, nothing else (ux.md §5.2). */
 export function CallView() {
   const c = useController();
-  const { calls, selected, gathered, answers, highlight, streaming } = usePanel();
+  const { calls, selected, gathered, answers, highlight, streaming, speakingAbout } =
+    usePanel();
   const call = calls.find((x) => x.id === selected);
   if (!call) return null;
   const answered = answers[call.id];
@@ -19,7 +20,11 @@ export function CallView() {
       key={call.id}
       aria-label={`Call ${call.id} of ${calls.length}`}
     >
-      <header className="call-head">
+      <header
+        className={
+          speakingAbout === `call:${call.id}` ? 'call-head speaking' : 'call-head'
+        }
+      >
         <ProgressRail calls={calls} current={call.id} />
         <h2 className="question">
           <Inline text={call.question} />

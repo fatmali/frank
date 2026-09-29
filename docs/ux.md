@@ -100,9 +100,14 @@ Where they conflict, the one listed first wins.
 
 ## 4. Frank's voice
 
-Frank is blunt about plans and decent to people. He's the senior colleague
-who reads your PR properly, says the uncomfortable thing plainly, and doesn't
-make you feel stupid for missing it.
+Frank is blunt about plans and decent to people. He's the staff engineer on
+your team who has seen this go wrong before: he reads the plan properly, says
+the uncomfortable thing plainly, names what every option costs, and guides
+you to the right call without making you feel stupid for missing it. He
+mentors in passing, a principle in a few words when it helps, and never
+lectures. He keeps his position until you give him new information, then
+updates. His character sheet is Frank's system prompt, the same on every
+brain (`packages/engine/src/prompt.ts`).
 
 **Rules:**
 - Short sentences, plain verbs, sentence case.
@@ -115,6 +120,8 @@ make you feel stupid for missing it.
 - Quote the plan's own words when pointing at something.
 - When the plan is fine, say so and step aside: "Nothing here worth a second
   look. Ship it."
+- Weigh a call by how hard it is to undo, and say which it is when it
+  matters.
 - Spoken replies are the first two sentences of the written one. Frank never
   reads out code, paths or tables.
 
@@ -289,91 +296,142 @@ can't be registered.
 ## 6. Talking to Frank
 
 A rubber duck is something you talk to. Saying "I'm not sure we even need
-Redis" out loud is faster, and more honest, than typing it. Voice is part of
-M1.
+Redis" out loud is faster, and more honest, than typing it. So Frank is
+voice first: he reads the plan, tells you what it does and what needs you,
+asks which call you want to talk through, and listens. The panel stays, as
+the thing you glance at while he talks. Chat mode, a setting, is the panel
+alone.
 
-### 6.1 How it works
+### 6.1 The briefing
 
-- **Push to talk.** Hold the hotkey (from any app) or hold `Space` in the
-  panel, talk, let go. A tap of the hotkey still just opens Frank. The
-  microphone starts only after the key has been held for a quarter of a
-  second, so a tap never turns it on by accident.
-- **Or talk freely.** Tap `Space` in the panel, or click the microphone, and
-  Frank listens hands-free: no key to hold. He hears when you start talking
-  and when you stop (Silero VAD, on-device). A pause isn't always the end:
-  after 0.7 s of quiet he looks at what you said so far, and if it trails off
-  ("we could use Redis because…", "and the…") he keeps listening; if it
-  sounds finished ("keep it", "why not Redis?") he answers at once. After
-  1.6 s of quiet the turn is over either way. While he thinks and talks he
-  isn't listening, so he never hears himself; then it's your turn again.
-  Tap `Space` while he talks to cut in. `Esc`, a tap on `Space`, hiding the
-  panel, or 45 seconds of nobody talking turns it off. The panel stays open
-  while it's on, and the menu bar icon shows he's listening.
+After the read starts, Frank speaks as soon as the first part has streamed
+in, not when all of it has. With the sample plan:
+
+> Claude Code's plan adds a per-key limit of 100 requests a minute to the
+> public API, with counters kept in Redis, so one noisy key can't slow the
+> API down for everyone. Here's what needs you. First, where the counters
+> live: Redis like the plan says, or in memory. Second, whether the health
+> check is limited: every route like the plan, or just the public API.
+> Third, whether two new packages are worth it, or just one. Which one do
+> you want to talk through? Or say go to take them in order.
+
+- The shape is always the same: the plan and its goal in one sentence, each
+  call in a line with its options by name, then one question. At most three
+  calls are spoken; more become "and two smaller ones, on screen".
+- Under 35 seconds (a test holds it to 90 words). What Frank checked and
+  found fine stays on screen, not in his mouth.
+- The sentences are built from the read, not asked of the brain, so they're
+  instant and the same every time. The read carries two fields for it: the
+  plan's `goal` and each call's `spoken` line.
+- Lines are only ever added as the read streams in, never changed, so what
+  he's said stays true. Calls keep the brain's order for the same reason:
+  "the second one" never moves.
+- The call he's talking about is lit on screen as he says it.
+
+### 6.2 Talking a call through
+
+You say "the Redis one", "the second one", "counters", or "go". Frank opens
+the call and says it: the question, what each option buys and costs, and
+what it comes down to.
+
+> Where should the counters live? The code disagrees with the plan here.
+> The plan goes with Redis: works across instances, but a new service to
+> run. Or in memory: nothing new to run, but resets on deploy. It comes
+> down to: will you run more than one API instance soon?
+
+Then it's your turn:
+
+| You say | Frank |
+| --- | --- |
+| "go", "in order", "the Redis one", "the second one", "health checks" | opens that call (from the read, or "let's talk about…" from a call) |
+| an answer to "it comes down to" ("no, just one") | "Then in memory. Go with that?" |
+| "yes", "go with that" | makes the call: "Going with in memory." Then the next open call. |
+| "keep it", "go with the plan" | "Keeping Redis." Then the next call. |
+| "option two", "go with in memory" | chooses it |
+| "drop it", "next", "back" | drops the step, moves on, goes back |
+| "what would you do?" | his take: the option, the reason, what would change his mind |
+| a question ("why not Postgres?") | a short spoken answer from the brain |
+
+Everything that isn't a question is handled on the Mac, at once. Only
+questions and "what would you do?" go to the brain: a whole plan talked
+through by voice can be one request, the read.
+
+When the last call is made: "That's all three. You changed one thing:
+counter storage, in memory. Want me to copy the note for Claude Code?"
+"Yes" copies it: "Note copied. Paste it into Claude Code." Keyboard actions
+(`↵`, `1`, `→`…) do the same things, and he says them too.
+
+### 6.3 Listening
+
+- **Turn-taking.** After Frank asks, the microphone opens by itself
+  (voice mode). He hears when you start and stop (Silero VAD, on-device).
+  A pause isn't always the end: after 0.7 s of quiet he looks at what you
+  said so far, and if it trails off ("we could use Redis because…") he keeps
+  listening; if it sounds finished ("keep it", "why not Redis?") he answers
+  at once. After 1.6 s of quiet the turn is over either way.
+- **Half duplex.** While he thinks and talks he isn't listening, so he
+  never hears himself. Any key cuts him off, and it's your turn. Cutting in
+  by voice needs echo cancellation (§6.7).
+- **Off.** Tap `Space` or the microphone, `Esc`, hiding the panel, or 45
+  seconds of nobody talking. In voice mode it stays off until you turn it
+  on. The panel stays open while it's on, and the menu bar icon shows he's
+  listening.
+- **Push to talk** still works: hold the hotkey from any app, or hold
+  `Space` in the panel.
 - **On this Mac, only.** Speech is transcribed on-device (Whisper). Audio
   never leaves the machine and is never saved. Only the words go to the
   brain, like typing them would.
-- **He talks back when talked to.** When the developer spoke, Frank speaks
-  his reply, at most two sentences, starting with the first sentence as soon
-  as it's written rather than after the whole reply. Spoken questions ask
-  the brain for a one- or two-sentence answer, which is also faster. Typing
-  gets text only. A setting chooses: when I talk to him (default), always,
-  never. Any key, or talking again, stops him mid-sentence.
-- **A voice worth hearing.** Natural voices (Kokoro-82M, on this Mac) sound
-  like a person, not a screen reader. The voice button next to the
-  microphone (or `V`) opens Frank's voice right in the panel, the same
-  picker as in Settings, Voice. Natural voices come first, each with a
-  Listen button, and choosing one says a line in it: Michael, Heart, George, Emma, Fenrir, Bella.
-  They're a one-time 212 MB download, offered right there, with progress.
-  Once installed, Michael is the default. Until then, and for anyone who
-  prefers one, the macOS voices are listed after (best installed first).
-- **Fast to hear you.** Transcription runs on the GPU where there is one,
-  sizes Whisper's audio window to the clip instead of padding to 30
-  seconds, and loads the model while the developer is still talking.
+- **Fast.** Whisper runs on the GPU, with its audio window sized to the clip.
+  Frank's voice is loaded when the panel opens; a long first sentence is made
+  in two, so the first sound comes sooner; each sentence is made while the
+  one before it plays.
 
-### 6.2 What you can say
+### 6.4 His voice
 
-Anything. Common commands work instantly, on-device, without asking the
-brain:
+Frank speaks with natural voices (Kokoro-82M, on this Mac): Michael (his
+own), Heart, George, Emma, Fenrir, Bella. The voice button next to the
+microphone, or `V`, opens them in the panel: voice or chat, then each voice
+with Listen; choosing one says a line in it. The same picker is in
+Settings. There are no macOS voices: until his voice is downloaded, Frank
+shows text, and the voice bar says so with a Download button.
 
-| Say | Frank does |
+### 6.5 What it looks like
+
+In voice mode the text box becomes a **voice bar**, one line with the state
+and three buttons (his voice, type instead, microphone):
+
+| State | Voice bar |
 | --- | --- |
-| "keep it", "go with the plan" | chooses option 1 |
-| "option two", "the second one", "go with in memory" | chooses that option (by number or by name) |
-| "yes", "no", or an answer's own words | answers "it comes down to" |
-| "drop it", "drop that step" | drops the step |
-| "next", "later", "skip" | moves on; the call stays as planned |
-| "back", "previous" | goes back |
-| "what would you do?", "your take?" | Frank's take |
-| "copy the note", "that's it", "done" | copies the note |
+| Reading | "Frank is reading the plan" |
+| Talking | "Frank is talking. Any key to cut in." with a breathing amber dot |
+| Your turn | the level meter, dimmed, "Your turn. Just talk." |
+| Hearing you | the level meter, live, "Hearing you" |
+| Thinking | "Thinking it over", and the seconds in the conversation |
+| Off | "Tap Space to talk" |
 
-Anything else is a question or a thought, and goes to Frank.
+What you said shows as your turn, exactly as transcribed, so a mishearing
+is obvious. A command shows as a line in the footer ("Chose In memory")
+instead. In chat mode the text box stays, and push to talk and talking
+freely work as in voice mode, but Frank only talks when talked to.
 
-### 6.3 What it looks like
+### 6.6 First use
 
-- **Listening.** The composer becomes a live level meter in duck amber,
-  with "Listening. Let go to send." The menu bar icon and sticky Frank show
-  listening.
-- **Transcribing.** "Got it." for the moment it takes.
-- **Thinking.** "Thinking it over", and after two seconds, for how long, so
-  a slow brain never looks stuck.
-- **Heard.** What Frank heard appears as the developer's turn, exactly as
-  transcribed, so a mishearing is obvious. A command shows as a line in the
-  footer ("Chose In memory") instead of a turn.
-- **Speaking.** A small "Frank is talking. Any key stops him." line.
-- **Talking freely.** The composer shows the level meter, dimmed while
-  waiting: "Listening. Just talk.", then "Hearing you" while you talk, with
-  a Stop button. While Frank answers: "Your turn when Frank finishes."
-  with a breathing amber dot.
+Onboarding asks once: "I'm best out loud…" **Download and talk** (voice,
+the default) or **I'd rather type** (chat). Voice needs about 360 MB of
+models, downloaded once, in the background, while you try the sample plan:
+listening (Whisper and Silero, 150 MB) and his voice (Kokoro, 212 MB). The
+first time he listens, macOS asks for the microphone. If it's refused:
+"Frank can't hear you. Allow the microphone in System Settings, Privacy,
+Microphone."
 
-### 6.4 First use
+### 6.7 Next: cutting in by voice
 
-The first time the developer talks to Frank:
-
-1. "Voice runs on this Mac. It needs 150 MB of speech models, downloaded
-   once." (`↵` download, `Esc` not now). A progress line follows; talking
-   freely starts by itself when it's done.
-2. macOS asks for the microphone. If it's refused: "Frank can't hear you.
-   Allow the microphone in System Settings, Privacy, Microphone."
+The microphone hears Frank through the speakers, so for now he doesn't
+listen while he talks. macOS's voice-processing audio unit
+(`kAudioUnitSubType_VoiceProcessingIO`) cancels echo; moving capture and
+playback onto it would let Silero hear you over him, so he stops the moment
+you start talking. It starts as a spike: measure how well it cancels on
+laptop speakers first.
 
 ## 7. Flows and states
 
@@ -385,7 +443,9 @@ The first time the developer talks to Frank:
    Choosing one runs a tiny test request and shows "Ready" or the exact fix.
 3. **Pick a hotkey.** A recorder shows the suggested `⌥⇧Space`: tap to open
    him, hold to talk.
-4. **Try it.** "Try me on a sample plan" opens a real-looking plan with its
+4. **Voice or chat.** Voice is the default, and downloads its models in
+   the background (§6.6).
+5. **Try it.** "Try me on a sample plan" opens a real-looking plan with its
    files, so the magic moment doesn't wait for the next agent run.
 
 ### 7.2 A normal session
@@ -396,10 +456,12 @@ The first time the developer talks to Frank:
    about to read and waits for `↵`. "Don't ask again for this project" skips
    this next time.
 3. **The read.** The gist, the size of it, the calls as questions, and
-   what's fine, marked on the plan's words as they arrive (§8.6).
-4. **The calls.** `↵` starts. One call at a time: answer what it comes down
-   to, choose an option, or skip. Talk or type whenever something needs
-   thinking through.
+   what's fine, marked on the plan's words as they arrive (§8.6). In voice
+   mode Frank briefs you while it arrives, then asks which call to talk
+   through (§6.1).
+4. **The calls.** Say which, or `↵` to start. One call at a time: answer
+   what it comes down to, choose an option, or skip. Talk or type whenever
+   something needs thinking through.
 5. **Your calls.** The decisions and the note. `⌘↵` copies it; the panel
    closes with the duck's nod, and the menu bar icon shows done for three
    seconds.
@@ -418,6 +480,7 @@ The first time the developer talks to Frank:
 | Note copied | "Note copied. Paste it into Claude Code." The agent is named, because Frank knows where the plan came from. |
 | Microphone refused | "Frank can't hear you. Allow the microphone in System Settings, Privacy, Microphone." |
 | Heard nothing | "Didn't catch that. Hold, talk, then let go." |
+| Voice not downloaded | Frank shows text; the voice bar: "Frank can't talk yet: his voice isn't downloaded." and Download. |
 
 Errors never apologize and are never vague: what happened, then how to fix
 it.

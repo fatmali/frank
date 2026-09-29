@@ -13,11 +13,14 @@ import {
   type Gathered,
   type Host,
   type VoiceEvent,
+  type VoiceMode,
 } from './host.ts';
 import type { Mood } from './duck.ts';
 
 export const DEMO_BREAKDOWN = {
   gist: 'Adds a per-key limit of 100 requests a minute to the public API, with counters kept in Redis.',
+  goal: "so one noisy key can't slow the API down for everyone",
+  fine: ['the 429 response and its Retry-After header', 'the rate limit tests'],
   calls: [
     {
       title: 'Counter storage',
@@ -25,6 +28,7 @@ export const DEMO_BREAKDOWN = {
       kind: 'silent-choice',
       planQuote: 'Use Redis to share counters across instances',
       stakes: 'Redis is a new service to deploy, secure and watch from now on.',
+      spoken: 'where the counters live: Redis like the plan says, or in memory',
       options: [
         {
           label: 'Redis',
@@ -58,6 +62,8 @@ export const DEMO_BREAKDOWN = {
       kind: 'silent-choice',
       planQuote: 'Apply the limiter to every route',
       stakes: 'The load balancer polls /health every 2 seconds.',
+      spoken:
+        'whether the health check is limited: every route like the plan, or just the public API',
       options: [
         {
           label: 'Every route',
@@ -95,6 +101,7 @@ export const DEMO_BREAKDOWN = {
       kind: 'silent-choice',
       planQuote: 'Add `express-rate-limit` and `rate-limit-redis` as dependencies',
       stakes: 'Every dependency is code you keep updating.',
+      spoken: 'whether two new packages are worth it, or just one',
       options: [
         {
           label: 'Both packages',
@@ -114,7 +121,6 @@ export const DEMO_BREAKDOWN = {
       evidence: [],
     },
   ],
-  fine: ['429 with a Retry-After header', 'Tests in test/rateLimit.test.ts'],
 };
 
 const TAKES: Record<string, string> = {
@@ -151,9 +157,11 @@ export interface DemoOptions {
   failure?: BrainFailure;
   firstRun?: boolean;
   plans?: Plan[];
-  /** Whether the speech models are already downloaded. */
+  /** Voice first (the default) or chat. */
+  mode?: VoiceMode;
+  /** Whether the listening models are already downloaded. */
   voiceModel?: boolean;
-  /** Whether the natural voices are already downloaded. */
+  /** Whether Frank's voice is already downloaded. */
   naturalVoices?: boolean;
   /** What the pretend microphone hears, in turn. */
   utterances?: string[];
@@ -163,15 +171,15 @@ export interface DemoOptions {
   onNextUtterance?: (next: string | undefined) => void;
 }
 
-/** A run through the sample plan by voice, one line per hold. */
+/** A run through the sample plan by voice, one line per turn. */
 export const DEMO_SCRIPT = [
-  'no',
+  'the redis one',
+  'no, just one',
+  'yes',
   'what would you do?',
   'take it',
-  'no',
-  'take it',
   'keep it',
-  "that's it",
+  'yes',
 ];
 
 export function demoHost(
@@ -186,12 +194,15 @@ export function demoHost(
     sticky: { enabled: false },
     plans: { window_minutes: 30 },
     context: { max_file_kb: 200, trusted_projects: [] },
-    voice: { talk_back: 'when-spoken' },
+    voice: { mode: opts.mode ?? 'voice' },
   };
   const voiceHandlers: ((e: VoiceEvent) => void)[] = [];
   const voice = (e: VoiceEvent) => voiceHandlers.forEach((h) => h(e));
   let hasModel = opts.voiceModel ?? true;
-  let hasNatural = opts.naturalVoices ?? false;
+  let hasNatural = opts.naturalVoices ?? true;
+  // Speech is a queue, like the real one: "spoken" when the last line ends.
+  let queued = 0;
+  let speech = 0;
   // Hands-free: the pretend microphone hears the next line a moment after
   // Frank is ready to listen.
   let handsFree = false;
@@ -270,6 +281,7 @@ export function demoHost(
       log(`saveApiKey ${kind}`);
     },
     stream(request, signal) {
+      log('stream');
       const out = channel<string>();
       void (async () => {
         if (opts.failure) {
@@ -388,6 +400,7 @@ export function demoHost(
       voice({ type: 'hands-free', state: 'off' });
     },
     async downloadPack(pack) {
+      log(`download ${pack}`);
       for (const fraction of [0.2, 0.55, 0.9]) {
         if (delay) await sleep(delay * 8);
         voice({ type: 'downloading', pack, fraction });
@@ -396,25 +409,44 @@ export function demoHost(
       else hasNatural = true;
       voice({ type: 'pack-ready', pack });
     },
-    async speak(text) {
+    async speak(text, id) {
       log(`speak ${text}`);
+      const generation = speech;
+      const started = () => {
+        if (id && generation === speech) voice({ type: 'speaking', id });
+      };
+      const ended = () => {
+        if (generation !== speech) return;
+        queued--;
+        if (!queued) voice({ type: 'spoken' });
+      };
+      queued++;
       const synth = opts.live ? globalThis.speechSynthesis : undefined;
       if (synth) {
         const line = new SpeechSynthesisUtterance(text);
-        line.onend = line.onerror = () => {
-          if (!synth.speaking && !synth.pending) voice({ type: 'spoken' });
-        };
+        line.onstart = started;
+        line.onend = line.onerror = ended;
         synth.speak(line);
         return;
       }
-      if (delay) await sleep(delay * 60);
-      voice({ type: 'spoken' });
+      setTimeout(() => {
+        started();
+        ended();
+      }, delay * 60);
     },
     async stopSpeaking() {
+      speech++;
+      queued = 0;
       if (opts.live) globalThis.speechSynthesis?.cancel();
     },
+    async packStatus() {
+      return {
+        listening: { installed: hasModel, megabytes: hasModel ? 0 : 150 },
+        voices: { installed: hasNatural, megabytes: hasNatural ? 0 : 212 },
+      };
+    },
     async listVoices() {
-      const natural = [
+      return [
         ['am_michael', 'Michael', 'American, calm'],
         ['af_heart', 'Heart', 'American, warm'],
         ['bm_george', 'George', 'British, dry'],
@@ -422,17 +454,8 @@ export function demoHost(
         id: `natural:${id}`,
         name: name!,
         description: description!,
-        kind: 'natural' as const,
         installed: hasNatural,
       }));
-      const system = ['Ava (Premium)', 'Samantha'].map((name) => ({
-        id: `system:${name}`,
-        name,
-        description: 'macOS',
-        kind: 'system' as const,
-        installed: true,
-      }));
-      return [...natural, ...system];
     },
     async previewVoice(name) {
       log(`preview ${name}`);

@@ -185,7 +185,7 @@ fn save_sticky_position(app: &AppHandle, position: PhysicalPosition<i32>) {
 
 // ---------------------------------------------------------------- hotkey
 
-/// Tap the hotkey to open or close Frank; hold it to talk (docs/ux.md §6.1).
+/// Tap the hotkey to open or close Frank; hold it to talk (docs/ux.md §6.3).
 /// The microphone starts only once the key has been held a moment, so a tap
 /// never turns it on.
 pub fn on_shortcut(app: &AppHandle, _shortcut: &Shortcut, event: ShortcutEvent) {
@@ -287,6 +287,9 @@ pub fn show_panel(app: &AppHandle, anchor: Anchor) {
     let _ = panel.show();
     let _ = panel.set_focus();
     let _ = app.emit_to(PANEL, "panel-shown", ());
+    // Frank may talk as soon as the read starts: have his voice ready.
+    let warm = app.clone();
+    std::thread::spawn(move || warm.state::<crate::speech::Speech>().warm_up());
 }
 
 /// Hides the panel. With no sticky Frank on screen, the whole app hides too,

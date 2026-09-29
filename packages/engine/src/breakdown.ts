@@ -21,7 +21,6 @@ export const MAX_CALLS = 5;
 
 const KINDS: readonly CallKind[] = ['option', 'silent-choice', 'assumption'];
 const UNDO: readonly UndoCost[] = ['hard', 'medium', 'easy'];
-const UNDO_RANK: Record<UndoCost, number> = { hard: 0, medium: 1, easy: 2 };
 
 export type BreakdownResult =
   | ({ status: 'calls'; via: 'json' | 'repaired' | 'fallback' } & Read)
@@ -31,6 +30,9 @@ export type BreakdownResult =
 /** What has arrived so far while the read streams in. */
 export interface PartialRead {
   gist: string;
+  goal: string;
+  /** Once the list is complete; undefined until then. */
+  fine: string[] | undefined;
   /** Complete, grounded calls, numbered in the order they arrived. */
   calls: Call[];
 }
@@ -57,13 +59,18 @@ export async function runBreakdown(
   const request = buildBreakdownRequest(ctx);
   let raw = '';
   // Nothing to show until the gist or a call has arrived.
-  let shown = '\u00000';
+  let shown = ['', '', -1, 0].join('\u0000');
   try {
     for await (const chunk of brain.stream(request, signal)) {
       raw += chunk;
       if (!onProgress) continue;
       const partial = parsePartialRead(raw, ctx);
-      const key = `${partial.gist}\u0000${partial.calls.length}`;
+      const key = [
+        partial.gist,
+        partial.goal,
+        partial.fine?.length ?? -1,
+        partial.calls.length,
+      ].join('\u0000');
       if (key !== shown) {
         shown = key;
         onProgress(partial);
@@ -104,9 +111,9 @@ export async function runBreakdown(
 
   const fallback = parseNumberedList(repaired || raw, ctx);
   if (fallback.length)
-    return toResult({ gist: '', calls: fallback, fine: [] }, 'fallback');
+    return toResult({ gist: '', goal: '', calls: fallback, fine: [] }, 'fallback');
   if (looksEmpty(repaired || raw))
-    return { status: 'nothing', via: 'fallback', gist: '', fine: [] };
+    return { status: 'nothing', via: 'fallback', gist: '', goal: '', fine: [] };
   return {
     status: 'failed',
     error: `The brain's answer couldn't be read: ${first.errors[0] ?? 'unknown format'}`,
@@ -116,17 +123,22 @@ export async function runBreakdown(
 function toResult(read: Read, via: 'json' | 'repaired' | 'fallback'): BreakdownResult {
   return read.calls.length
     ? { status: 'calls', via, ...read }
-    : { status: 'nothing', via, gist: read.gist, fine: read.fine };
+    : { status: 'nothing', via, gist: read.gist, goal: read.goal, fine: read.fine };
 }
 
 export type ParseResult = { ok: true; read: Read } | { ok: false; errors: string[] };
 
-/** Parses, validates, grounds and ranks a JSON breakdown. */
+/** Parses, validates, grounds and numbers a JSON breakdown. */
 export function parseBreakdown(text: string, ctx: Context): ParseResult {
   const json = extractJson(text);
   if (json === undefined) return { ok: false, errors: ['no JSON object found'] };
 
-  const root = json as { calls?: unknown; gist?: unknown; fine?: unknown };
+  const root = json as {
+    calls?: unknown;
+    gist?: unknown;
+    goal?: unknown;
+    fine?: unknown;
+  };
   if (typeof root !== 'object' || root === null || !Array.isArray(root.calls)) {
     return { ok: false, errors: ['expected an object with a "calls" array'] };
   }
@@ -140,7 +152,12 @@ export function parseBreakdown(text: string, ctx: Context): ParseResult {
   if (errors.length) return { ok: false, errors };
   return {
     ok: true,
-    read: { gist: str(root.gist), calls: rank(calls), fine: strings(root.fine, 4) },
+    read: {
+      gist: str(root.gist),
+      goal: str(root.goal),
+      calls: number(calls),
+      fine: strings(root.fine, 4),
+    },
   };
 }
 
@@ -149,13 +166,15 @@ export function parseBreakdown(text: string, ctx: Context): ParseResult {
  * and each call once its object is complete. Never throws.
  */
 export function parsePartialRead(text: string, ctx: Context): PartialRead {
-  const gistMatch = /"gist"\s*:\s*("(?:[^"\\]|\\.)*")/.exec(text);
-  let gist = '';
-  if (gistMatch) {
+  const gist = completeString(text, 'gist');
+  const goal = completeString(text, 'goal');
+  let fine: string[] | undefined;
+  const fineMatch = /"fine"\s*:\s*(\[(?:[^\]"]|"(?:[^"\\]|\\.)*")*\])/.exec(text);
+  if (fineMatch) {
     try {
-      gist = str(JSON.parse(gistMatch[1]!));
+      fine = strings(JSON.parse(fineMatch[1]!), 4);
     } catch {
-      gist = '';
+      fine = undefined;
     }
   }
   const calls: Call[] = [];
@@ -174,7 +193,18 @@ export function parsePartialRead(text: string, ctx: Context): PartialRead {
       }
     }
   }
-  return { gist, calls };
+  return { gist, goal, fine, calls };
+}
+
+/** A top-level string field, once its closing quote has arrived. */
+function completeString(text: string, key: string): string {
+  const m = new RegExp(`"${key}"\\s*:\\s*("(?:[^"\\\\]|\\\\.)*")`).exec(text);
+  if (!m) return '';
+  try {
+    return str(JSON.parse(m[1]!));
+  } catch {
+    return '';
+  }
 }
 
 /** The complete top-level JSON objects in an array that starts at `from`. */
@@ -253,6 +283,7 @@ function validateCall(item: unknown, i: number, errors: string[]): Call | undefi
     title,
     question: str(c.question) || title,
     stakes: str(c.stakes),
+    spoken: str(c.spoken),
     kind,
     planQuote: str(c.planQuote),
     planChoice: options[0]?.instruction || planChoice || title,
@@ -326,12 +357,13 @@ function ground(call: Call, ctx: Context): Call {
   return grounded;
 }
 
-function rank(calls: Call[]): Call[] {
-  return calls
-    .map((c, i) => ({ c, i }))
-    .sort((a, b) => UNDO_RANK[a.c.undoCost] - UNDO_RANK[b.c.undoCost] || a.i - b.i)
-    .slice(0, MAX_CALLS)
-    .map(({ c }, i) => ({ ...c, id: String(i + 1) }));
+/**
+ * Numbers calls in the order the brain gave them, which the prompt asks to be
+ * hardest to undo first. Never re-sorted: Frank may already have said "the
+ * second one" out loud while the read streamed in.
+ */
+function number(calls: Call[]): Call[] {
+  return calls.slice(0, MAX_CALLS).map((c, i) => ({ ...c, id: String(i + 1) }));
 }
 
 /**
@@ -404,6 +436,7 @@ export function parseNumberedList(text: string, ctx: Context): Call[] {
         title,
         question: title,
         stakes: '',
+        spoken: '',
         kind: 'silent-choice',
         planQuote: title,
         planChoice: title,
@@ -416,7 +449,7 @@ export function parseNumberedList(text: string, ctx: Context): Call[] {
       ctx,
     );
   });
-  return rank(calls);
+  return number(calls);
 }
 
 function looksEmpty(text: string): boolean {

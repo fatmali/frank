@@ -42,14 +42,15 @@ for, because you don't need another one.
 
 ## How it works
 
-1. **Summon him.** Press `⌥⇧Space` (or your own hotkey), or click Frank in your menu bar. Hold
-   the key to talk, or type if you're in an open-plan office and have some
-   dignity left.
+1. **Summon him.** Press `⌥⇧Space` (or your own hotkey), or click Frank in
+   your menu bar. He talks. Switch him to chat if you're in an open-plan
+   office and have some dignity left.
 2. **He finds the plan.** Frank grabs the plan your agent just wrote, plus
    your repo and the files the plan touches. You don't paste anything.
-3. **He gives you the read.** One line on what the plan does, how many
-   calls actually need you ("two, the rest is routine"), and what he checked
-   and found fine, so you can stop worrying about it. The calls, five at
+3. **He tells you the read.** Out loud, in about thirty seconds: what the
+   plan does and why, and each call that needs you, in a line. Then: "Which
+   one do you want to talk through?" On screen, what he checked and found
+   fine, so you can stop worrying about it. The calls, five at
    most, hardest to undo first:
    - **options the plan offers:** "Redis or in memory?"
    - **choices it made without asking:** new dependencies, schema changes,
@@ -62,8 +63,9 @@ for, because you don't need another one.
    more than one instance?"). Answer that and Frank points at the option it
    leads to. Ask *"what would you do?"* and you get a straight answer. He
    doesn't hedge. He's a duck.
-   Hold the hotkey and just say it: "no, one instance", "go with in memory",
-   "next". Speech is turned into text on your Mac; audio never leaves it.
+   Just say it: "the Redis one", "no, just one", "yes", "next". He hears
+   when you've finished, answers, and listens again. Speech is turned into
+   text on your Mac; audio never leaves it.
 5. **Back to work.** Frank writes a short note for your agent (keep this,
    change that, drop this), copies it, and goes back to wherever ducks go.
 
@@ -284,8 +286,8 @@ which case he's just... there. Watching. You asked for this.)
 
 What works today: the menu bar duck, the hotkey (tap to open, hold to
 talk), finding your latest Claude Code plan, reading the files it mentions,
-the read, one call at a time with its trade-offs, talking it through (typed,
-push-to-talk, or hands-free, with natural voices), and copying the note. Brains: Claude Code, GitHub Copilot, the
+the read, Frank briefing you out loud and talking each call through with you
+(voice first, hands-free, or chat if you'd rather), and copying the note. Brains: Claude Code, GitHub Copilot, the
 Anthropic and OpenAI APIs (or anything OpenAI-compatible), and Ollama.
 
 ### Try it (macOS, early, unsigned)

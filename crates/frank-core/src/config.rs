@@ -18,15 +18,31 @@ pub struct Config {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct VoiceConfig {
-    /// When Frank speaks his replies: `when-spoken` (default), `always` or `never`.
+    /// `voice`: Frank talks you through plans and listens (the default).
+    /// `chat`: the panel, typed, and Frank speaks only when spoken to.
+    /// Empty in configs from before modes: see `talk_back`.
+    pub mode: String,
+    /// Before modes: `never` meant chat; anything else means voice.
     pub talk_back: String,
-    /// The system voice Frank speaks with. Empty: the best one installed.
+    /// The voice Frank speaks with, `natural:<id>`. Empty: his own.
     pub name: String,
+}
+
+impl VoiceConfig {
+    /// `voice` or `chat`, for configs old and new.
+    pub fn mode(&self) -> &str {
+        match self.mode.as_str() {
+            "voice" | "chat" => &self.mode,
+            _ if self.talk_back == "never" => "chat",
+            _ => "voice",
+        }
+    }
 }
 
 impl Default for VoiceConfig {
     fn default() -> Self {
         Self {
+            mode: String::new(),
             talk_back: "when-spoken".into(),
             name: String::new(),
         }
@@ -181,6 +197,19 @@ mod tests {
         assert!(!cfg.sticky.enabled, "sticky mode is off by default");
         assert_eq!(cfg.hotkey, "Alt+Shift+Space");
         assert_eq!(cfg.plans.window_minutes, 30);
+        assert_eq!(cfg.voice.mode(), "voice", "Frank talks by default");
+    }
+
+    #[test]
+    fn voice_mode_from_old_and_new_configs() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(&path, "[voice]\ntalk_back = \"never\"\n").unwrap();
+        assert_eq!(Config::load(&path).unwrap().voice.mode(), "chat");
+        std::fs::write(&path, "[voice]\ntalk_back = \"always\"\n").unwrap();
+        assert_eq!(Config::load(&path).unwrap().voice.mode(), "voice");
+        std::fs::write(&path, "[voice]\nmode = \"chat\"\ntalk_back = \"always\"\n").unwrap();
+        assert_eq!(Config::load(&path).unwrap().voice.mode(), "chat");
     }
 
     #[test]

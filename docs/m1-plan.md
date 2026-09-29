@@ -116,17 +116,18 @@ Every task ends with something that runs or is tested.
 | D7 | Paste and drop a plan | Both start a session |
 | D8 | Onboarding: brain choice with live status, hotkey, sample plan | New install to first useful answer in under 60 s |
 | D9 | Sticky mode (off by default): always-on-top duck, drag, remembered position | Toggled from the menu and settings |
-| D10 | Design tokens as CSS variables (ux.md §6), bundled Monaspace Neon and Radon | No hard-coded colours or radii in components |
-| D11 | Motion: the marking moment, the note nod; reduced-motion variants | Matches ux.md §6.6 |
+| D10 | Design tokens as CSS variables (ux.md §8), bundled Monaspace Neon and Radon | No hard-coded colours or radii in components |
+| D11 | Motion: the marking moment, the note nod; reduced-motion variants | Matches ux.md §8.6 |
 | D12 | Settings: brain, hotkey, sticky mode, plan window, per-project context trust, talk back | Changes persist to `config.toml` |
 | D13 | Voice: hold-to-talk on the hotkey and `Space`, microphone capture, on-device Whisper transcription with a consented model download, spoken replies, listening states | Capture and resampling tested; transcription and speech smoke-tested on a Mac |
 | D14 | Natural voices (Kokoro, in-app picker with Listen and a consented download) and hands-free talking (Silero VAD, end of turn from pauses and whether the words sound finished) | Synthesis checked by transcribing it back; turn-taking tested on real speech; controller tests for the hands-free loop |
+| D15 | Voice first: spoken briefing and call intros built from the read, calls picked by voice, confirm and wrap-up, voice bar, voice or chat at first run; natural voices only; Frank's character sheet | Engine tests for the briefing (length, stability while streaming) and voice commands; a whole session driven by voice in controller tests |
 
 ### E. Finish
 
 | # | Task | Done when |
 | --- | --- | --- |
-| E1 | Accessibility pass: VoiceOver labels, focus order, contrast | Checklist in ux.md §6.7 passes |
+| E1 | Accessibility pass: VoiceOver labels, focus order, contrast | Checklist in ux.md §8.7 passes |
 | E2 | Dogfood on real plans for a week and fix what stings | Issues filed and the top ones fixed |
 | E3 | README "Try it" section with install steps for the unsigned build | A fresh Mac can install and run it |
 

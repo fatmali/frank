@@ -12,6 +12,16 @@ export {
   type PartialRead,
 } from './breakdown.ts';
 export { Session, splitSuggestion } from './session.ts';
-export { parseCommand, type Command } from './commands.ts';
+export { parseCommand, type Command, type CommandContext } from './commands.ts';
+export {
+  briefing,
+  callIntro,
+  leadsTo,
+  madeCall,
+  wrapUp,
+  SPOKEN_CALLS,
+  type Line,
+  type BriefingInput,
+} from './voice.ts';
 export { composeNote, copiedMessage, agentName } from './note.ts';
 export { fitToBudget, contextSize } from './budget.ts';

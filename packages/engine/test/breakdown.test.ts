@@ -19,7 +19,7 @@ import {
 const ctx = loadFixture('rate-limit');
 
 describe('parseBreakdown', () => {
-  it('ranks calls hardest to undo first and numbers them', () => {
+  it("numbers calls in the brain's order, hardest to undo first", () => {
     const r = parseBreakdown(RATE_LIMIT_BREAKDOWN, ctx);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -34,10 +34,14 @@ describe('parseBreakdown', () => {
     const r = parseBreakdown(RATE_LIMIT_BREAKDOWN, ctx);
     if (!r.ok) throw new Error('parse failed');
     expect(r.read.gist).toMatch(/^Adds a per-key limit/);
+    expect(r.read.goal).toBe("so one noisy key can't slow the API for everyone");
     expect(r.read.fine).toEqual([
-      '429 with a Retry-After header',
-      'Tests in test/rateLimit.test.ts',
+      'the 429 response and its Retry-After header',
+      'the rate limit tests',
     ]);
+    expect(r.read.calls[0]!.spoken).toBe(
+      'where the counters live: Redis like the plan says, or in memory',
+    );
     const redis = r.read.calls[0]!;
     expect(redis.question).toBe('Where should the counters live?');
     expect(redis.stakes).toMatch(/new service/);
@@ -58,8 +62,10 @@ describe('parseBreakdown', () => {
   it('still reads the older shape, without options or a hinge', () => {
     const r = parseBreakdown(LEGACY_BREAKDOWN, ctx);
     if (!r.ok) throw new Error('parse failed');
-    const redis = r.read.calls[0]!;
+    const redis = r.read.calls[1]!;
     expect(redis.question).toBe('Store counts in Redis');
+    expect(redis.spoken).toBe('');
+    expect(r.read.goal).toBe('');
     expect(redis.options.map((o) => o.label)).toEqual([
       'Counters live in Redis, shared across instances',
       'In-memory counters',
@@ -70,7 +76,7 @@ describe('parseBreakdown', () => {
 
   it('drops a hinge whose answers point at options that do not exist', () => {
     const odd = JSON.parse(RATE_LIMIT_BREAKDOWN);
-    odd.calls[1].hinge.answers[1].option = 7;
+    odd.calls[0].hinge.answers[1].option = 7;
     const r = parseBreakdown(JSON.stringify(odd), ctx);
     if (!r.ok) throw new Error('parse failed');
     expect(r.read.calls[0]!.hinge).toBeUndefined();
@@ -183,7 +189,7 @@ describe('runBreakdown', () => {
     expect(buildBreakdownRequest(ctx).messages).toHaveLength(1);
   });
 
-  it('returns ranked calls from good JSON', async () => {
+  it('returns numbered calls from good JSON', async () => {
     const r = await runBreakdown(new ScriptedBrain([RATE_LIMIT_BREAKDOWN]), ctx);
     expect(r.status).toBe('calls');
     if (r.status !== 'calls') return;
@@ -219,7 +225,7 @@ describe('runBreakdown', () => {
       new ScriptedBrain(['{"calls":[]}']),
       loadFixture('tidy-rename'),
     );
-    expect(r).toEqual({ status: 'nothing', via: 'json', gist: '', fine: [] });
+    expect(r).toEqual({ status: 'nothing', via: 'json', gist: '', goal: '', fine: [] });
   });
 
   it('fails clearly when the brain errors', async () => {
@@ -232,29 +238,44 @@ describe('runBreakdown', () => {
 });
 
 describe('the read, streaming in', () => {
-  it('shows the gist, then each call as soon as it is complete', async () => {
+  it('shows the gist, the goal, what is fine, then each call as soon as it is complete', async () => {
     const seen: PartialRead[] = [];
     const brain = new ScriptedBrain([RATE_LIMIT_BREAKDOWN]);
     const r = await runBreakdown(brain, ctx, undefined, (p) => seen.push(p));
     expect(seen[0]).toEqual({
       gist: expect.stringMatching(/^Adds a per-key/),
+      goal: '',
+      fine: undefined,
       calls: [],
     });
-    expect(seen.map((p) => p.calls.length)).toEqual([0, 1, 2, 3]);
-    // While streaming, calls are numbered in arrival order...
-    expect(seen[1]!.calls[0]).toMatchObject({ id: '1', title: 'New dependencies' });
-    // ...and the final read ranks them.
-    if (r.status === 'calls') expect(r.calls[0]!.title).toBe('Counter storage');
+    expect(seen[1]!.goal).toMatch(/^so one noisy key/);
+    expect(seen[2]!.fine).toHaveLength(2);
+    expect(seen.map((p) => p.calls.length)).toEqual([0, 0, 0, 1, 2, 3]);
+    // Numbered as they arrive, and the final read keeps those numbers.
+    expect(seen[3]!.calls[0]).toMatchObject({ id: '1', title: 'Counter storage' });
+    if (r.status !== 'calls') throw new Error('no calls');
+    expect(r.calls.map((c) => c.title)).toEqual(seen.at(-1)!.calls.map((c) => c.title));
   });
 
   it('never throws on half an answer', () => {
     const half = RATE_LIMIT_BREAKDOWN.slice(
       0,
-      RATE_LIMIT_BREAKDOWN.indexOf('Counter storage'),
+      RATE_LIMIT_BREAKDOWN.indexOf('Limited routes'),
     );
     const p = parsePartialRead(half, ctx);
-    expect(p.calls.map((c) => c.title)).toEqual(['New dependencies']);
-    expect(parsePartialRead('{"gist":"Adds a lim', ctx)).toEqual({ gist: '', calls: [] });
+    expect(p.calls.map((c) => c.title)).toEqual(['Counter storage']);
+    expect(parsePartialRead('{"gist":"Adds a lim', ctx)).toEqual({
+      gist: '',
+      goal: '',
+      fine: undefined,
+      calls: [],
+    });
+    expect(parsePartialRead('{"gist":"x","goal":"","fine":["the te', ctx).fine).toBe(
+      undefined,
+    );
+    expect(
+      parsePartialRead('{"gist":"x","fine":["a ] b","c"],"calls":[', ctx).fine,
+    ).toEqual(['a ] b', 'c']);
     expect(
       parsePartialRead('{"gist":"A \\"quoted\\" plan","calls":[{"title":"x}"', ctx).gist,
     ).toBe('A "quoted" plan');

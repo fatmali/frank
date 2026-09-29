@@ -119,11 +119,12 @@ Other sessions follow the same shape:
 ### 3.2 Input
 
 - **FR-5 [M1]** Type into the panel.
-- **FR-6 [M1]** Push-to-talk. Holding the hotkey (or `Space` in the panel)
-  records, and releasing it transcribes on-device and sends. Common commands
-  ("keep it", "option two", "next") act at once; anything else goes to
-  Frank. When spoken to, Frank speaks the first two sentences of his reply.
-  See ux.md §6.
+- **FR-6 [M1]** Voice first. After the read, Frank briefs the developer out
+  loud (the plan and its goal, each call in a line) and asks which call to
+  talk through, then listens hands-free and takes turns. Push-to-talk works
+  too. Common commands ("the Redis one", "keep it", "yes", "next") act at
+  once on-device; anything else goes to Frank, and his answers are spoken.
+  Chat mode, a setting, is the panel alone. See ux.md §6.
 - **FR-7 [M1]** Drop files or text onto the panel, or onto sticky Frank, to
   add them as context. A pasted plan works the same as a found one.
 
@@ -470,11 +471,20 @@ reuses it within the session.
 
 ### 6.5 Voice
 
-Two ways to talk. Push-to-talk: hold the hotkey (or `Space` in the panel)
-to record, release to transcribe; the microphone starts after a
-quarter-second hold, so a tap never opens it. Hands-free: tap `Space` or the
-microphone, and Frank follows the conversation himself (ux.md §6.1).
+Voice first (ux.md §6), or chat (`voice.mode` in the config). In voice
+mode Frank speaks a briefing built from the read, talks each call through,
+and listens hands-free between his turns. Push-to-talk: hold the hotkey (or
+`Space` in the panel) to record, release to transcribe; the microphone
+starts after a quarter-second hold, so a tap never opens it.
 
+- **The briefing and call intros** are sentences built on-device from the
+  read (`packages/engine/src/voice.ts`), not asked of the brain: instant,
+  deterministic and tested. The read's schema orders `gist`, `goal`, `fine`,
+  then `calls` (each with a `spoken` line), so the briefing starts while
+  the read streams. Lines are only ever appended, and calls keep the
+  brain's order, so nothing already said changes.
+- **Speaking**: each sentence carries what it's about (`call:2`); the audio
+  player marks when it starts playing and the panel lights that item.
 - **Transcription** runs on-device with whisper.cpp (`base.en`). Audio is
   never saved and never leaves the machine.
 - **Turn-taking** (hands-free) uses Silero VAD v5 (ONNX, 2 MB) on 32 ms
@@ -487,16 +497,18 @@ microphone, and Frank follows the conversation himself (ux.md §6.1).
 - **Models** come in two packs, each downloaded once with consent:
   listening (Whisper and Silero, about 150 MB, `~/.frank/models/`) and
   voices (Kokoro and dictionaries, about 212 MB, `~/.frank/voices/`).
-- **Commands** ("keep it", "option two", "next", "what would you do?") are
-  matched on-device against the current call, so they act instantly.
-  Everything else goes to the brain as text.
+- **Commands** ("the Redis one", "go", "keep it", "option two", "yes",
+  "next", "what would you do?") are matched on-device against the calls, so
+  they act instantly; picking a call by words tolerates transcription slips
+  ("reddis"). Everything else goes to the brain as text.
 - **Spoken replies**: at most two sentences, each said as soon as it's
-  written, only when the developer spoke (configurable). Any key stops him.
-  Natural voices are Kokoro-82M (fp16 ONNX via onnxruntime, 24 kHz), with
+  written; always in voice mode, only when spoken to in chat. Any key stops
+  him. Voices are Kokoro-82M (fp16 ONNX via onnxruntime, 24 kHz), with
   Frank's own grapheme-to-phoneme step in Rust: the misaki dictionaries,
   a developer lexicon (Redis, Postgres, JSON), numbers, acronyms, camelCase
-  and suffixes. About 0.25 s of compute per second of speech on a CPU. The
-  macOS voices (`say`) are the fallback.
+  and suffixes. About 0.25 s of compute per second of speech on a CPU; a
+  long first sentence is made in two so the first sound comes sooner. There
+  is no fallback voice: without the voice pack, Frank shows text.
 
 ### 6.6 Privacy and security
 

@@ -66,13 +66,92 @@ export async function drain(chunks: AsyncIterable<string>): Promise<string> {
 /** A well-formed read of the rate-limit fixture, as a good brain would return it. */
 export const RATE_LIMIT_BREAKDOWN = JSON.stringify({
   gist: 'Adds a per-key limit of 100 requests a minute to the public API, with counters in Redis.',
+  goal: "so one noisy key can't slow the API for everyone",
+  fine: ['the 429 response and its Retry-After header', 'the rate limit tests'],
   calls: [
+    {
+      title: 'Counter storage',
+      question: 'Where should the counters live?',
+      kind: 'option',
+      planQuote: 'Use Redis to share counters across instances',
+      stakes: 'Redis is a new service to deploy, secure and watch.',
+      spoken: 'where the counters live: Redis like the plan says, or in memory',
+      options: [
+        {
+          label: 'Redis',
+          gain: 'works across instances',
+          cost: 'a new service to run',
+          instruction: 'Keep counters in Redis, shared across instances.',
+        },
+        {
+          label: 'In memory',
+          gain: 'nothing new to run',
+          cost: 'resets on deploy',
+          instruction: 'Keep counters in memory in the API process instead of Redis.',
+        },
+      ],
+      hinge: {
+        question: 'Will you run more than one instance soon?',
+        answers: [
+          {
+            answer: 'Yes',
+            option: 1,
+          },
+          {
+            answer: 'No',
+            option: 2,
+          },
+        ],
+      },
+      undoCost: 'hard',
+      contradicted: true,
+      evidence: [
+        {
+          file: 'docker-compose.yml',
+          line: 1,
+          note: 'Only api and postgres; no Redis',
+        },
+      ],
+    },
+    {
+      title: 'Limited routes',
+      question: 'Should /health be rate limited?',
+      kind: 'silent-choice',
+      planQuote: 'Apply the limiter to every route in src/server.ts',
+      stakes: 'The load balancer polls /health every 2 seconds.',
+      spoken:
+        'whether the health check is limited: every route like the plan, or just the public API',
+      options: [
+        {
+          label: 'Every route',
+          gain: 'one rule everywhere',
+          cost: 'can throttle health checks',
+          instruction: 'Apply the limiter to every route.',
+        },
+        {
+          label: 'Public API only',
+          gain: 'health checks untouched',
+          cost: 'internal routes unlimited',
+          instruction: 'Apply the limiter to /api/public only; leave /health alone.',
+        },
+      ],
+      undoCost: 'medium',
+      contradicted: false,
+      evidence: [
+        {
+          file: 'src/server.ts',
+          line: 8,
+          note: '/health is polled every 2 seconds',
+        },
+      ],
+    },
     {
       title: 'New dependencies',
       question: 'Is express-rate-limit worth adding?',
       kind: 'silent-choice',
       planQuote: 'Add express-rate-limit and rate-limit-redis as dependencies',
       stakes: 'Two new packages to keep updated.',
+      spoken: 'whether two new packages are worth it, or just one',
       options: [
         {
           label: 'Both packages',
@@ -91,67 +170,7 @@ export const RATE_LIMIT_BREAKDOWN = JSON.stringify({
       contradicted: false,
       evidence: [],
     },
-    {
-      title: 'Counter storage',
-      question: 'Where should the counters live?',
-      kind: 'option',
-      planQuote: 'Use Redis to share counters across instances',
-      stakes: 'Redis is a new service to deploy, secure and watch.',
-      options: [
-        {
-          label: 'Redis',
-          gain: 'works across instances',
-          cost: 'a new service to run',
-          instruction: 'Keep counters in Redis, shared across instances.',
-        },
-        {
-          label: 'In memory',
-          gain: 'nothing new to run',
-          cost: 'resets on deploy',
-          instruction: 'Keep counters in memory in the API process instead of Redis.',
-        },
-      ],
-      hinge: {
-        question: 'Will you run more than one instance soon?',
-        answers: [
-          { answer: 'Yes', option: 1 },
-          { answer: 'No', option: 2 },
-        ],
-      },
-      undoCost: 'hard',
-      contradicted: true,
-      evidence: [
-        { file: 'docker-compose.yml', line: 1, note: 'Only api and postgres; no Redis' },
-      ],
-    },
-    {
-      title: 'Limited routes',
-      question: 'Should /health be rate limited?',
-      kind: 'silent-choice',
-      planQuote: 'Apply the limiter to every route in src/server.ts',
-      stakes: 'The load balancer polls /health every 2 seconds.',
-      options: [
-        {
-          label: 'Every route',
-          gain: 'one rule everywhere',
-          cost: 'can throttle health checks',
-          instruction: 'Apply the limiter to every route.',
-        },
-        {
-          label: 'Public API only',
-          gain: 'health checks untouched',
-          cost: 'internal routes unlimited',
-          instruction: 'Apply the limiter to /api/public only; leave /health alone.',
-        },
-      ],
-      undoCost: 'medium',
-      contradicted: false,
-      evidence: [
-        { file: 'src/server.ts', line: 8, note: '/health is polled every 2 seconds' },
-      ],
-    },
   ],
-  fine: ['429 with a Retry-After header', 'Tests in test/rateLimit.test.ts'],
 });
 
 /** The same breakdown in the older shape: no gist, options or hinge. */

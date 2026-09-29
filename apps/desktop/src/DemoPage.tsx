@@ -20,21 +20,22 @@ export function DemoPage({
         <h1>Try Frank</h1>
         <p>
           This is Frank's real panel, running in your browser with a pretend brain and a
-          pretend microphone. The plan is a sample from a Claude Code session. Click the
-          panel first so it has the keyboard.
+          pretend microphone. The plan is a sample from a Claude Code session. Frank talks
+          you through it with your browser's voice; when it's your turn, the pretend
+          microphone says the line below for you. Click the panel first so it has the
+          keyboard.
         </p>
         <ul className="demo-keys">
+          <li>Any key cuts Frank off</li>
           <li>
-            <kbd className="kbd">↵</kbd> starts, and takes the option that's lit
+            Tap <kbd className="kbd">Space</kbd> to stop or start listening,{' '}
+            <kbd className="kbd">V</kbd> for his voice
           </li>
           <li>
-            <kbd className="kbd">1</kbd> <kbd className="kbd">2</kbd> choose,{' '}
-            <kbd className="kbd">A</kbd> <kbd className="kbd">B</kbd> answer,{' '}
-            <kbd className="kbd">?</kbd> Frank's take
-          </li>
-          <li>
-            Hold <kbd className="kbd">Space</kbd> to talk and let go to send, or tap it to
-            talk freely: Frank hears when you've finished
+            <kbd className="kbd">↵</kbd> <kbd className="kbd">1</kbd>{' '}
+            <kbd className="kbd">2</kbd> <kbd className="kbd">A</kbd>{' '}
+            <kbd className="kbd">B</kbd> <kbd className="kbd">?</kbd> still work, and{' '}
+            <a href="?chat">chat mode</a> keeps to the panel
           </li>
         </ul>
       </header>
@@ -43,7 +44,7 @@ export function DemoPage({
         <p className="demo-next" aria-live="polite">
           {nextLine ? (
             <>
-              When you talk, the pretend microphone hears: <q>{nextLine}</q>
+              On your turn, the pretend microphone says: <q>{nextLine}</q>
             </>
           ) : (
             'The pretend microphone has run out of lines.'

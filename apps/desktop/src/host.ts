@@ -29,22 +29,33 @@ export interface Config {
   plans: { window_minutes: number };
   context: { max_file_kb: number; trusted_projects: string[] };
   /**
-   * `name`: `natural:<id>` or `system:<name>`; empty or missing means the best
-   * available (a natural voice once they're downloaded).
+   * `mode`: voice (Frank talks you through plans, the default) or chat.
+   * Empty in older configs: see `voiceMode`. `name`: `natural:<id>`; empty
+   * is Frank's own voice.
    */
-  voice: { talk_back: TalkBack; name?: string };
+  voice: { mode?: VoiceMode | ''; talk_back?: TalkBack; name?: string };
 }
 
-/** A voice Frank can speak with (Settings, Voice). */
+/** A voice Frank can speak with. They run on this Mac once the voice pack is downloaded. */
 export interface VoiceChoice {
-  /** What goes in `config.voice.name`. */
+  /** What goes in `config.voice.name`: `natural:am_michael`. */
   id: string;
   name: string;
   description: string;
-  /** Natural voices run on this Mac once the voice pack is downloaded. */
-  kind: 'natural' | 'system';
   installed: boolean;
 }
+
+/** Voice first (Frank talks you through the plan), or chat (the panel, typed). */
+export type VoiceMode = 'voice' | 'chat';
+
+/** The mode a config means, old or new (ux.md §6). */
+export function voiceMode(config: Config | undefined): VoiceMode {
+  const v = config?.voice;
+  if (v?.mode === 'voice' || v?.mode === 'chat') return v.mode;
+  return v?.talk_back === 'never' ? 'chat' : 'voice';
+}
+
+export type PackStatus = Record<Pack, { installed: boolean; megabytes: number }>;
 
 /** The models behind voice, each downloaded once, with consent. */
 export type Pack = 'listening' | 'voices';
@@ -52,7 +63,7 @@ export type Pack = 'listening' | 'voices';
 /** Hands-free: waiting for you, hearing you, checking you've finished, or paused while Frank answers. */
 export type HandsFree = 'waiting' | 'hearing' | 'checking' | 'paused';
 
-/** When Frank speaks his replies (ux.md §6.1). */
+/** Before voice modes: when Frank spoke his replies. `never` means chat. */
 export type TalkBack = 'when-spoken' | 'always' | 'never';
 
 /** What the microphone side of the app reports (ux.md §6.3). */
@@ -67,6 +78,8 @@ export type VoiceEvent =
   | { type: 'needs-pack'; pack: Pack; megabytes: number }
   | { type: 'downloading'; pack: Pack; fraction: number }
   | { type: 'pack-ready'; pack: Pack }
+  /** A sentence started playing; `id` is what it's about ("call:2"). */
+  | { type: 'speaking'; id: string }
   /** Frank finished (or stopped) speaking. */
   | { type: 'spoken' }
   | { type: 'hands-free'; state: HandsFree | 'off' };
@@ -125,8 +138,9 @@ export interface Host {
   handsFreeResume(): Promise<void>;
   handsFreeStop(): Promise<void>;
   downloadPack(pack: Pack): Promise<void>;
-  /** Adds a sentence to what Frank is saying. */
-  speak(text: string): Promise<void>;
+  packStatus(): Promise<PackStatus>;
+  /** Adds a sentence to what Frank is saying; `id` comes back in a "speaking" event. */
+  speak(text: string, id?: string): Promise<void>;
   stopSpeaking(): Promise<void>;
   listVoices(): Promise<VoiceChoice[]>;
   previewVoice(id: string): Promise<void>;

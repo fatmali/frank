@@ -5,11 +5,16 @@
  */
 import {
   Session,
+  briefing,
+  callIntro,
   copiedMessage,
   fitToBudget,
+  leadsTo,
+  madeCall,
   parseCommand,
   runBreakdown,
   splitSuggestion,
+  wrapUp,
   type Call,
   type Command,
   type Plan,
@@ -25,7 +30,9 @@ import {
   type HandsFree,
   type Host,
   type Pack,
+  type PackStatus,
   type VoiceEvent,
+  voiceMode,
 } from './host.ts';
 import { SAMPLE_FILES, SAMPLE_ORIGIN, samplePlan } from './sample.ts';
 
@@ -93,10 +100,16 @@ export interface PanelState {
   note: string;
   progress: { made: number; total: number };
   voice: VoiceState;
-  /** Hands-free conversation, while it's on (ux.md §6.1). */
+  /** Hands-free conversation, while it's on (ux.md §6.3). */
   handsFree: { state: HandsFree; level: number } | undefined;
   /** Packs downloading now, with how far along they are. */
   downloads: Partial<Record<Pack, number>>;
+  /** Which voice packs are downloaded; undefined until asked. */
+  packs: PackStatus | undefined;
+  /** What Frank is talking about right now: "plan", "call:2"… */
+  speakingAbout: string | undefined;
+  /** Voice mode: the developer switched the voice bar to a text box. */
+  typing: boolean;
   /** What went wrong with voice, in words the developer can act on. */
   voiceError: string | undefined;
 }
@@ -151,6 +164,9 @@ export class PanelController {
     voice: { state: 'off' },
     handsFree: undefined,
     downloads: {},
+    packs: undefined,
+    speakingAbout: undefined,
+    typing: false,
     voiceError: undefined,
   };
   private listeners = new Set<() => void>();
@@ -163,6 +179,15 @@ export class PanelController {
   private mood: Mood | undefined;
   /** The last thing the developer said came from the microphone. */
   private spoken = false;
+  /** Lines of the briefing already said, while it's still being said. */
+  private briefed: number | undefined;
+  /** A yes-or-no question Frank asked and is waiting on. */
+  private awaiting:
+    { kind: 'confirm'; callId: string; option: number } | { kind: 'copy' } | undefined;
+  /** Said before the next call's intro: "Going with in memory." */
+  private prefix: string | undefined;
+  /** Voice mode listens after Frank speaks, until the developer turns it off. */
+  private listen = true;
 
   constructor(readonly host: Host) {
     this.brain = new HostBrain(host);
@@ -240,12 +265,76 @@ export class PanelController {
     this.flashTimer = setTimeout(() => this.set({ flash: undefined }), FLASH_MS);
   }
 
+  // ------------------------------------------------------------ voice first
+
+  /** Voice first: Frank talks you through the plan (ux.md §6). */
+  get voiceFirst(): boolean {
+    return voiceMode(this.state.config) === 'voice';
+  }
+
+  /** Frank has a voice to speak with. */
+  private get canSpeak(): boolean {
+    return this.state.packs?.voices.installed ?? false;
+  }
+
+  private async refreshPacks(): Promise<void> {
+    try {
+      this.set({ packs: await this.host.packStatus() });
+    } catch {
+      // Unknown: Frank stays quiet rather than asking to download.
+    }
+  }
+
+  /** Says lines out loud, in voice mode, when Frank has a voice. */
+  private say(lines: { text: string; about?: string }[]): void {
+    if (!this.voiceFirst || !this.canSpeak) return;
+    const said = lines.filter((l) => l.text.trim());
+    if (!said.length) return;
+    this.set({ voice: { state: 'speaking' } });
+    for (const l of said) void this.host.speak(speakableProse(l.text), l.about);
+  }
+
+  /** Stops whatever Frank is saying, to say something else. */
+  private hush(): void {
+    this.briefed = undefined;
+    if (this.state.voice.state === 'speaking') {
+      void this.host.stopSpeaking();
+      this.set({ voice: { state: 'off' }, speakingAbout: undefined });
+    }
+  }
+
+  /** The briefing, as far as the read has got. */
+  private brief(read: Parameters<typeof briefing>[0], done: boolean): void {
+    if (this.briefed === undefined || !this.voiceFirst || !this.canSpeak) return;
+    const lines = briefing({ ...read, ...sourceOf(this.state.plan) }, done);
+    const fresh = lines.slice(this.briefed);
+    this.briefed = done ? undefined : lines.length;
+    this.say(fresh);
+  }
+
+  /** Frank talks a call through: what was just decided, then the call. */
+  private speakCall(id: string): void {
+    const call = this.session?.calls.find((c) => c.id === id);
+    const prefix = this.prefix;
+    this.prefix = undefined;
+    if (!call || !this.voiceFirst) return;
+    this.hush();
+    this.say([...(prefix ? [{ text: prefix }] : []), ...callIntro(call)]);
+  }
+
+  /** In a conversation about a plan: the read, a call, or your calls. */
+  private get talking(): boolean {
+    const view = this.state.view.name;
+    return !!this.session && (view === 'read' || view === 'call' || view === 'calls');
+  }
+
   // ------------------------------------------------------------ opening
 
   /** Runs when the panel opens: loads the newest plan, or resumes. */
   async start(): Promise<void> {
     const config = await this.host.getConfig();
     this.set({ config, noteCopied: false, notice: undefined });
+    await this.refreshPacks();
     if (!config.brain.kind) {
       this.set({ view: { name: 'onboarding' } });
       void this.host.setPinned(true);
@@ -300,6 +389,10 @@ export class PanelController {
     });
     void this.host.setPinned(false);
     this.setMood('thinking');
+    this.hush();
+    this.awaiting = undefined;
+    this.prefix = undefined;
+    this.listen = true;
 
     const gathered: Gathered =
       plan.origin === SAMPLE_ORIGIN
@@ -348,9 +441,12 @@ export class PanelController {
 
     const work = this.begin();
     this.startSlowTimers();
+    // Frank starts talking as soon as the first part of the read arrives.
+    this.briefed = 0;
     // The read appears as soon as its first part arrives, and fills in.
     const result = await runBreakdown(this.brain, context, work.signal, (partial) => {
       if (work.signal.aborted) return;
+      this.brief(partial, false);
       this.stopSlowTimers();
       const fresh = partial.calls.length > this.state.calls.length;
       this.set({
@@ -388,6 +484,9 @@ export class PanelController {
       fine: result.fine,
     });
     this.setMood(calls.length ? 'judging' : 'idle');
+    this.brief({ ...result, calls }, true);
+    // Without a voice, nothing to wait for: listen now.
+    if (this.state.voice.state !== 'speaking') this.yourTurn();
   }
 
   private markingTimer: ReturnType<typeof setTimeout> | undefined;
@@ -444,6 +543,11 @@ export class PanelController {
     if (this.state.newerPlan) await this.load(this.state.newerPlan);
   }
 
+  /** Voice mode: swap the voice bar for a text box, or back. */
+  setTyping(typing: boolean): void {
+    this.set({ typing });
+  }
+
   toggleVoiceMenu(open = !this.state.voiceMenuOpen): void {
     this.set({ voiceMenuOpen: open, pickerOpen: false });
   }
@@ -468,8 +572,10 @@ export class PanelController {
     const s = this.session;
     if (!s || !s.calls.some((c) => c.id === id)) return;
     if (this.state.streaming && this.state.streaming.callId !== id) this.cancel();
+    const moved = this.state.view.name !== 'call' || this.state.selected !== id;
     s.select(id);
     this.sync({ view: { name: 'call' }, changing: false, turnError: undefined });
+    if (moved || this.prefix) this.speakCall(id);
   }
 
   /** The next call (this one stays as planned), or your calls after the last. */
@@ -502,10 +608,20 @@ export class PanelController {
 
   /** Your calls: every decision and the note. */
   review(): void {
-    if (!this.session) return;
+    const s = this.session;
+    if (!s) return;
     this.cancel();
     this.sync({ view: { name: 'calls' }, changing: false });
     this.setMood(this.restingMood());
+    if (!this.voiceFirst || !s.calls.length) return;
+    const prefix = this.prefix;
+    this.prefix = undefined;
+    this.hush();
+    this.awaiting = { kind: 'copy' };
+    this.say([
+      ...(prefix ? [{ text: prefix }] : []),
+      { text: wrapUp(s.calls, this.state.plan?.source) },
+    ]);
   }
 
   // ------------------------------------------------------------ making calls
@@ -520,6 +636,7 @@ export class PanelController {
     this.cancel();
     const next = s.choose(call.id, option);
     this.flash(option === 1 ? `Kept the plan: ${chosen.label}` : `Chose ${chosen.label}`);
+    this.prefix = madeCall(s.calls.find((c) => c.id === call.id)!);
     this.after(next);
   }
 
@@ -528,10 +645,15 @@ export class PanelController {
     const s = this.session;
     const call = this.current;
     if (!s || !call?.hinge?.answers[index] || this.state.view.name !== 'call') return;
-    s.answer(call.id, index);
+    const option = s.answer(call.id, index);
     // A fresh answer outranks an older suggestion from Frank.
     if (s.suggestion?.callId === call.id) s.suggestion = undefined;
     this.sync();
+    if (this.voiceFirst) {
+      this.hush();
+      this.awaiting = { kind: 'confirm', callId: call.id, option };
+      this.say([{ text: leadsTo(call, option), about: `call:${call.id}` }]);
+    }
   }
 
   /** Enter in a call: take the highlighted option. */
@@ -547,6 +669,7 @@ export class PanelController {
     this.cancel();
     const next = s.decide(call.id, { verdict: 'drop' });
     this.flash(`Dropped: ${call.title}`);
+    this.prefix = 'Dropped.';
     this.after(next);
   }
 
@@ -566,6 +689,7 @@ export class PanelController {
     const next = s.decide(call.id, { verdict: 'change', detail });
     this.set({ changing: false });
     this.flash('Changed, in your words');
+    this.prefix = 'Got it.';
     this.after(next);
   }
 
@@ -588,28 +712,64 @@ export class PanelController {
   async send(text: string, spoken = false): Promise<void> {
     const t = text.trim();
     if (!t) return;
-    this.spoken = spoken;
+    // In voice mode every answer is heard, typed question or not.
+    const heard = spoken || this.voiceFirst;
+    this.spoken = heard;
     if (!this.session) {
       if (this.state.view.name === 'no-plan') await this.pastePlan(t);
       return;
     }
     if (this.state.changing) return this.changeTo(t);
+    const awaiting = this.awaiting;
+    this.awaiting = undefined;
     const command = parseCommand(
       t,
       this.state.view.name === 'call' ? this.current : undefined,
+      {
+        calls: this.session.calls,
+        ...(awaiting ? { expecting: 'yes-no' as const } : {}),
+      },
     );
-    if (command && (await this.run(command))) return;
+    if (command && (await this.run(command, awaiting))) return;
 
     // From the read or your calls, a question is about the whole plan.
     if (this.state.view.name !== 'call') this.session.selected = undefined;
     const s = this.session;
-    await this.stream((signal) => s.ask(t, signal, { spoken }), s.selected);
+    await this.stream((signal) => s.ask(t, signal, { spoken: heard }), s.selected);
   }
 
   /** Runs a command. Returns false when it doesn't apply here. */
-  private async run(command: Command): Promise<boolean> {
+  private async run(
+    command: Command,
+    awaiting: PanelController['awaiting'] = undefined,
+  ): Promise<boolean> {
     const view = this.state.view.name;
     switch (command.type) {
+      case 'open':
+        this.show(command.call);
+        return true;
+      case 'start':
+        if (view !== 'read' && view !== 'calls') return false;
+        this.beginCalls();
+        return true;
+      case 'yes':
+        if (awaiting?.kind === 'copy') await this.copyNote();
+        else if (awaiting?.kind === 'confirm' && awaiting.callId === this.state.selected)
+          this.choose(awaiting.option);
+        else return false;
+        return true;
+      case 'no':
+        if (!awaiting) return false;
+        this.hush();
+        this.say([
+          {
+            text:
+              awaiting.kind === 'copy'
+                ? "Okay. It's here when you want it."
+                : 'Okay. What would you rather do?',
+          },
+        ]);
+        return true;
       case 'copy':
         await this.copyNote();
         return true;
@@ -646,8 +806,12 @@ export class PanelController {
   async whatWouldYouDo(spoken = false): Promise<void> {
     const s = this.session;
     if (!s || this.state.streaming || this.state.view.name !== 'call') return;
-    this.spoken = spoken;
-    await this.stream((signal) => s.whatWouldYouDo(signal, { spoken }), s.selected);
+    const heard = spoken || this.voiceFirst;
+    this.spoken = heard;
+    await this.stream(
+      (signal) => s.whatWouldYouDo(signal, { spoken: heard }),
+      s.selected,
+    );
   }
 
   /** The last turn sent, so Retry can send it again after a failure. */
@@ -659,6 +823,7 @@ export class PanelController {
   ): Promise<void> {
     this.lastTurn = () => this.stream(make, callId);
     this.cancel();
+    this.hush();
     void this.host.stopSpeaking();
     const work = this.begin();
     const spoken = this.spoken;
@@ -674,7 +839,7 @@ export class PanelController {
       const ready = spokenSentences(splitSuggestion(text).text, done);
       for (; said < ready.length; said++) {
         if (said === 0) this.set({ voice: { state: 'speaking' } });
-        void this.host.speak(ready[said]!);
+        void this.host.speak(ready[said]!, callId ? `call:${callId}` : undefined);
       }
     };
     try {
@@ -700,9 +865,9 @@ export class PanelController {
     sayReady(true);
   }
 
+  /** Voice mode: always. Chat: when spoken to. Either way, only with a voice. */
   private shouldTalkBack(spoken: boolean): boolean {
-    const mode = this.state.config?.voice?.talk_back ?? 'when-spoken';
-    return mode === 'always' || (mode === 'when-spoken' && spoken);
+    return this.canSpeak && (this.voiceFirst || spoken);
   }
 
   // ------------------------------------------------------------ voice
@@ -725,13 +890,16 @@ export class PanelController {
       return this.stopSpeaking();
     if (this.state.handsFree) return this.stopHandsFree();
     this.wantsHandsFree = true;
-    if (this.state.voice.state === 'speaking') this.stopSpeaking();
+    this.listen = true;
+    this.hush();
     this.set({ voiceError: undefined });
     await this.host.handsFreeStart();
   }
 
+  /** Turns the microphone off; in voice mode it stays off until turned on. */
   async stopHandsFree(): Promise<void> {
     this.wantsHandsFree = false;
+    this.listen = false;
     await this.host.handsFreeStop();
   }
 
@@ -752,20 +920,31 @@ export class PanelController {
     this.set({ voice: { state: 'off' } });
   }
 
+  /** Any key while Frank talks: he stops, and it's your turn. */
   stopSpeaking(): void {
     if (this.state.voice.state !== 'speaking') return;
-    void this.host.stopSpeaking();
-    this.set({ voice: { state: 'off' } });
+    this.hush();
+    this.yourTurn();
   }
 
-  /** Hands-free, after Frank has had his say: the developer's turn again. */
+  /**
+   * After Frank has had his say: the developer's turn. Hands-free listens
+   * again; in voice mode it starts listening if it isn't already.
+   */
   private yourTurn(): void {
-    if (
-      this.state.handsFree?.state === 'paused' &&
-      this.state.voice.state !== 'speaking' &&
-      !this.state.streaming
-    )
+    if (this.state.voice.state !== 'off' || this.state.streaming) return;
+    if (this.state.handsFree?.state === 'paused') {
       void this.host.handsFreeResume();
+      return;
+    }
+    if (
+      !this.state.handsFree &&
+      this.voiceFirst &&
+      this.listen &&
+      this.talking &&
+      this.state.packs?.listening.installed
+    )
+      void this.host.handsFreeStart();
   }
 
   private onVoice(e: VoiceEvent): void {
@@ -811,8 +990,9 @@ export class PanelController {
         const downloads = { ...this.state.downloads };
         delete downloads[e.pack];
         this.set({ downloads });
+        void this.refreshPacks();
         if (e.pack === 'voices') {
-          this.flash('Natural voices are ready.');
+          this.flash("Frank's voice is ready.");
         } else if (this.wantsHandsFree) {
           void this.toggleHandsFree();
         } else {
@@ -820,8 +1000,12 @@ export class PanelController {
         }
         return;
       }
+      case 'speaking':
+        this.set({ speakingAbout: e.id });
+        return;
       case 'spoken':
         if (this.state.voice.state === 'speaking') this.set({ voice: { state: 'off' } });
+        this.set({ speakingAbout: undefined });
         this.yourTurn();
         return;
       case 'hands-free':
@@ -853,6 +1037,8 @@ export class PanelController {
     }
     await this.host.copy(this.session.note());
     this.set({ noteCopied: true, notice: copiedMessage(plan.source) });
+    this.hush();
+    this.say([{ text: copiedMessage(plan.source) }]);
     this.setMood('done');
     setTimeout(() => void this.host.hidePanel(), 900);
     setTimeout(() => {
@@ -863,13 +1049,14 @@ export class PanelController {
 
   /** Esc: backs out of whatever is open, else closes the panel. Nothing is lost. */
   async close(): Promise<void> {
-    if (this.state.voice.state === 'speaking') return this.stopSpeaking();
+    // What's open on screen first, then Frank talking, then listening.
     if (this.state.voice.state === 'needs-pack') return this.declinePack();
-    if (this.state.handsFree) return this.stopHandsFree();
     if (this.state.changing) return this.cancelChange();
     if (this.state.voiceMenuOpen) return this.toggleVoiceMenu(false);
     if (this.state.pickerOpen) return this.togglePicker(false);
     if (this.state.settingsOpen) return this.closeSettings();
+    if (this.state.voice.state === 'speaking') return this.stopSpeaking();
+    if (this.state.handsFree) return this.stopHandsFree();
     await this.host.hidePanel();
   }
 
@@ -888,6 +1075,21 @@ export class PanelController {
 
   async reloadConfig(): Promise<void> {
     this.set({ config: await this.host.getConfig() });
+  }
+
+  /**
+   * Voice first or chat. Voice downloads whatever it still needs, in the
+   * background: the panel works as text meanwhile.
+   */
+  async chooseMode(mode: 'voice' | 'chat'): Promise<void> {
+    const config = this.state.config ?? (await this.host.getConfig());
+    await this.host.saveConfig({ ...config, voice: { ...config.voice, mode } });
+    await this.reloadConfig();
+    if (mode !== 'voice') return;
+    await this.refreshPacks();
+    for (const pack of ['listening', 'voices'] as const) {
+      if (!this.state.packs?.[pack].installed) void this.downloadPack(pack);
+    }
   }
 
   /** First-run setup is done. */
@@ -1006,4 +1208,9 @@ function speakableProse(reply: string): string {
     .replace(/\*\*([^*]+)\*\*|\*([^*]+)\*/g, '$1$2')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/** The plan's source, for "Claude Code's plan…". */
+function sourceOf(plan: Plan | undefined): { source?: Plan['source'] } {
+  return plan ? { source: plan.source } : {};
 }

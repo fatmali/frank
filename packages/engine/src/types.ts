@@ -86,6 +86,12 @@ export interface Call {
   question: string;
   /** Why it matters, in one sentence. Empty when the brain didn't say. */
   stakes: string;
+  /**
+   * The call in one line, written to be heard: the decision and its options
+   * by name ("where the counters live: Redis, like the plan says, or in
+   * memory"). Empty from older reads.
+   */
+  spoken: string;
   kind: CallKind;
   /** The plan's own words for this call. Empty when they couldn't be found in the plan. */
   planQuote: string;
@@ -109,6 +115,8 @@ export interface Call {
 export interface Read {
   /** What the plan does, in one sentence. */
   gist: string;
+  /** Why: a clause such as "so one noisy key can't slow the API for everyone". May be empty. */
+  goal: string;
   calls: Call[];
   /** Things Frank checked and found fine. */
   fine: string[];

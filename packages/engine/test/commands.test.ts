@@ -21,6 +21,8 @@ describe('parseCommand', () => {
     ['yeah', { type: 'answer', answer: 0 }],
     ['Nope.', { type: 'answer', answer: 1 }],
     ['no', { type: 'answer', answer: 1 }],
+    ['no, just one', { type: 'answer', answer: 1 }],
+    ['yeah probably soon', { type: 'answer', answer: 0 }],
     ['drop it', { type: 'drop' }],
     ['drop that step', { type: 'drop' }],
     ['next', { type: 'next' }],
@@ -49,5 +51,65 @@ describe('parseCommand', () => {
     expect(parseCommand('option three', redis)).toBeUndefined();
     expect(parseCommand('keep it')).toEqual({ type: 'choose', option: 1 });
     expect(parseCommand('option two')).toBeUndefined();
+  });
+});
+
+describe('picking a call by voice', () => {
+  const calls = r.read.calls; // 1 counters (Redis), 2 health check routes, 3 new packages
+
+  it.each([
+    ['go', { type: 'start' }],
+    ["Okay, let's go.", { type: 'start' }],
+    ['in order', { type: 'start' }],
+    ['the second one', { type: 'open', call: '2' }],
+    ['number three', { type: 'open', call: '3' }],
+    ['the last one', { type: 'open', call: '3' }],
+    ['the Redis one', { type: 'open', call: '1' }],
+    ['the reddis one', { type: 'open', call: '1' }],
+    ['counters', { type: 'open', call: '1' }],
+    ['health checks', { type: 'open', call: '2' }],
+    ["let's talk about the packages", { type: 'open', call: '3' }],
+  ])('%s', (said, command) => {
+    expect(parseCommand(said, undefined, { calls })).toEqual(command);
+  });
+
+  it.each([
+    'Why Redis?',
+    'what does the limiter do on a 429',
+    'is this plan any good',
+    'the thing about the plan',
+  ])('leaves "%s" for Frank', (said) => {
+    expect(parseCommand(said, undefined, { calls })).toBeUndefined();
+  });
+
+  it('switches calls from inside one only when asked to', () => {
+    expect(parseCommand("let's talk about the health check", redis, { calls })).toEqual({
+      type: 'open',
+      call: '2',
+    });
+    // Inside a call, "in memory" is still one of its options.
+    expect(parseCommand('in memory', redis, { calls })).toEqual({
+      type: 'choose',
+      option: 2,
+    });
+  });
+});
+
+describe('answering Frank’s yes-or-no questions', () => {
+  it.each([
+    ['yes', { type: 'yes' }],
+    ['Yeah.', { type: 'yes' }],
+    ['go with that', { type: 'yes' }],
+    ['yeah go for it', { type: 'yes' }],
+    ['no, not that', { type: 'no' }],
+    ['okay', { type: 'yes' }],
+    ['nope', { type: 'no' }],
+    ['wait', { type: 'no' }],
+  ])('%s', (said, command) => {
+    expect(parseCommand(said, redis, { expecting: 'yes-no' })).toEqual(command);
+  });
+
+  it('means the hinge when Frank asked the hinge, not a yes-or-no question', () => {
+    expect(parseCommand('yeah', redis)).toEqual({ type: 'answer', answer: 0 });
   });
 });
