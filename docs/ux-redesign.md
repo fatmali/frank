@@ -1,7 +1,9 @@
 # UX redesign: rubber ducking the agent's plan
 
-Status: proposed. Replaces the earlier redesign plan. Once built, this folds
-into ux.md §5 to §8, and this file goes.
+Status: in progress. Built: the plans home, the shorter briefing, "walk me
+through it" with answers heard in your explanation, the new commands, and
+patience per turn. Building now: the screen (§6). Once done, this folds into
+ux.md §5 to §8, and this file goes.
 
 ## 1. What rubber ducking is, and what that means for Frank
 
@@ -84,7 +86,9 @@ there and whether it fits; he listens, and speaks to point at the gap.
 
 The same sample plan, start to finish.
 
-**Summon.** The read starts. The panel shows the plan itself.
+**Summon.** Frank grabs the newest plan you haven't talked through, and
+the read starts; the panel shows the plan itself. If there's nothing new, he
+opens the plans home instead and asks "Which plan?".
 
 **The briefing,** as built, but shorter: the plan and its goal, then the
 calls by name, then one question.
@@ -162,7 +166,20 @@ Revise the plan before building:
 Everything else stays as planned.
 ```
 
-### 4.1 Other ways in
+### 4.1 The plans home
+
+Every plan from the last two weeks, newest first, one line each: the title,
+where it came from and when, and how far you got ("2 of 3 decided", "note
+copied"). Pick one by clicking it, by its number, or by saying it ("the JWT
+one", "the second one"). Going back to a plan you've started picks up where
+you left off: same calls, same decisions, same place. ⌘P, "show my plans",
+or the plan's title in the header opens it. With no plans, it says how to
+add one: paste it, or drop the file.
+
+A plan that no Claude Code session mentions has no project on the home,
+rather than a guessed one.
+
+### 4.2 Other ways in
 
 - **"You explain it."** Frank says what the plan does there and what each
   option buys and costs (today's call intro), then asks the deciding
@@ -179,11 +196,12 @@ Everything else stays as planned.
 - **"Hold on", "let me think."** He waits, as long as it takes, and the
   duck stays still, looking at you.
 
-### 4.2 What he says, and how much
+### 4.3 What he says, and how much
 
 | Moment | Frank's line |
 | --- | --- |
-| Briefing | The plan and its goal, the calls by name, the hard-to-undo one first: about 15 seconds |
+| Plans home | "Which plan?", only when summoned with nothing new |
+| Briefing | The plan and its goal, the calls by name, then "Where should we start?" with the hardest to undo: about 20 seconds |
 | A call | "Walk me through this bit", with the plan's words highlighted |
 | While you explain | Nothing; the duck nods |
 | After you explain | What you missed or got wrong, with the receipt; or "Right," and the fact that backs you |
