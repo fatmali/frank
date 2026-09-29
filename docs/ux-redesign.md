@@ -1,4 +1,4 @@
-# UX redesign: the duck listens
+# UX redesign: rubber ducking the agent's plan
 
 Status: proposed. Replaces the earlier redesign plan. Once built, this folds
 into ux.md §5 to §8, and this file goes.
@@ -19,16 +19,19 @@ people who just read it. Speaking out loud slows you down and exposes the
 jump from step A to step D, and it works better with a listener, even a
 silent one, than thinking aloud alone.
 
-**What it means for Frank.** The one who explains is the one who learns. The
-Frank we built mostly talks: a 35-second briefing, then an intro for each
-call, while the developer answers "yes" and "the Redis one". That is the
-opposite of rubber ducking. The developer is a listener to a summary of a
-plan they didn't write, which is exactly how you end up accepting a plan you
-don't understand.
+**What it means for Frank.** What gets rubber-ducked is the agent's plan:
+the developer explains it to the duck the way you'd explain someone else's
+code, line by line, and the problems in it show up while they explain.
+Frank has read the plan and the code, so he's a duck that can nod, follow
+along, and point when what you just said doesn't match the plan or the
+code.
 
-So the redesign turns it round: **the developer talks, Frank listens, and
-Frank speaks only to point at the gap** between what they said and what the
-plan does.
+The flow stays as built: Frank briefs you, then asks which call to talk
+through. What changes is inside a call. Today Frank does the explaining (he
+lists each option's gains and costs) and you answer "yes". That's the duck
+talking. Instead, he puts the plan's words for that call in front of you
+and asks you to walk him through it; you explain what the agent is doing
+there and whether it fits; he listens, and speaks to point at the gap.
 
 ## 2. What else the research adds
 
@@ -63,10 +66,11 @@ plan does.
 
 ## 3. Principles
 
-1. **You talk more than Frank.** His turns are one or two short sentences.
-   The long turns are yours.
+1. **You explain the plan; Frank listens.** Inside a call, the long turns
+   are yours. His are one or two short sentences.
 2. **He points at gaps, not at everything.** He speaks when what you said
-   and what the plan does differ, when the code disagrees, or when you ask.
+   about the plan doesn't match the plan or the code, when your explanation
+   skips the part that matters, or when you ask.
 3. **Facts are his job, decisions are yours.** He never asks what the files
    can answer, and he never decides for you. He'll recommend when asked.
 4. **One-way doors get the time.** Easy-to-change calls are kept in one
@@ -80,63 +84,62 @@ plan does.
 
 The same sample plan, start to finish.
 
-**Summon.** You press the hotkey. The read starts at once, silently, and the
-panel shows the plan itself. Frank asks one thing:
+**Summon.** The read starts. The panel shows the plan itself.
 
-> What did you ask Claude for?
+**The briefing,** as built, but shorter: the plan and its goal, then the
+calls by name, then one question.
 
-**You explain.** This is the rubber ducking. You talk, with pauses; Frank
-nods while you do.
-
-> Um, rate limiting on the public API. Somebody's hammering it... so a
-> per-key limit, like a hundred a minute.
-
-While you talk, the read finishes: your explanation fills the 15 to 30
-seconds a real plan takes to read, instead of a spinner.
-
-**The gap.** Frank compares what you said with what the plan does, and says
-only the difference:
-
-> The plan does that. It also adds Redis and limits the health check, and
-> you didn't mention either.
-
-The two parts you didn't mention light up in the plan. If you'd said
-something the plan contradicts ("just the public API"), he'd say that
-instead: "You said the public API. The plan limits every route, health
-check included."
-
-**Triage by how hard it is to undo.**
-
+> Claude Code's plan adds a per-key limit of 100 requests a minute to the
+> public API, so one noisy key can't slow it down for everyone. Three
+> things in it need you: Redis, the health check, and two new packages.
 > Redis is the one that's hard to undo. Start there?
 
-If there are calls that are easy to change later, he offers to keep them in
-one go: "The other two are easy to change later. Keep them as planned?"
+The easy-to-change calls get one offer, whenever you like: "The other two
+are easy to change later. Keep them as planned?"
 
-**One question at a time, facts first.** He brings the receipt, then asks
-the one thing only you know:
+**Walk me through it.** Frank highlights the plan's own words for the call
+and hands it to you:
 
-> There's no Redis in your docker-compose file, so it's a new service to
-> run. How many instances do you run?
+> Walk me through this bit. What's the plan doing with Redis?
 
-> Just the one. Maybe two next year?
+**You explain the agent's plan.** This is the rubber ducking. You read its
+words and say what they do, with pauses; Frank nods while you talk.
 
-**Recommendation, with the easy-to-change option when the future is
-unsure.**
+> So it keeps the counters in Redis, so that... every instance sees the
+> same count. Which matters if we have more than one instance. We've got
+> one. So why does it want Redis?
+
+The problem has announced itself: you found it by explaining. Frank's job
+now is to confirm it with facts, and not to repeat what you just said:
+
+> Right, and there's no Redis in your docker-compose file either, so it's
+> a new service to run for a second instance you don't have.
+
+**Your explanation often answers the deciding question.** Here, "we've got
+one" answered "how many instances do you run?", so Frank doesn't ask it. He
+goes straight to what it points to:
 
 > Then in memory, behind the limiter's store option, so Redis is a small
-> change when you get there. Go with that?
+> change if you add an instance. Go with that?
 
 > Yes.
+
+**When you can't explain it,** that's a finding too. "I don't know why it
+wants Redis" gets the plan's reason in one sentence ("so every instance
+shares one count"), then the deciding question.
 
 **Decisions settle other decisions.**
 
 > Done. That also means you don't need rate-limit-redis, so that's gone
-> too.
+> too. Next, the health check. Walk me through it?
 
-> The health check: the load balancer hits it every two seconds, and a
-> limit could take the API out of rotation. Leave it unlimited?
+> It applies the limiter to every route... including /health. Hm, the load
+> balancer hits that, right?
 
-> Oh. Yeah, leave it.
+> Every two seconds, in src/server.ts. A limit could take the API out of
+> rotation. Leave it unlimited?
+
+> Yeah, leave it.
 
 **Hear it back, then the note.**
 
@@ -161,11 +164,11 @@ Everything else stays as planned.
 
 ### 4.1 Other ways in
 
-- **"You tell me" or "I haven't read it."** Frank gives the plan in one
-  sentence and how many calls need you, then goes to triage. This is the
-  old briefing, cut to two sentences.
-- **Silence for 8 seconds after his question.** "Or I can tell you what it
-  does."
+- **"You explain it."** Frank says what the plan does there and what each
+  option buys and costs (today's call intro), then asks the deciding
+  question. For when you're too tired to walk it through.
+- **Silence for 8 seconds after "walk me through it".** "Or I can explain
+  it."
 - **"I don't know"** to a deciding question. Frank recommends the option
   that's easiest to change, and the note says so: "Why: unknown yet; keep
   it easy to switch."
@@ -180,25 +183,27 @@ Everything else stays as planned.
 
 | Moment | Frank's line |
 | --- | --- |
-| Opening | One question: "What did you ask Claude for?" |
-| The gap | What the plan does beyond or against what you said, in one or two sentences |
-| Triage | The one-way doors by name; one offer to keep the easy ones |
-| A call | The receipt, then the deciding question |
+| Briefing | The plan and its goal, the calls by name, the hard-to-undo one first: about 15 seconds |
+| A call | "Walk me through this bit", with the plan's words highlighted |
+| While you explain | Nothing; the duck nods |
+| After you explain | What you missed or got wrong, with the receipt; or "Right," and the fact that backs you |
+| The deciding question | Only if your explanation didn't already answer it |
 | After your answer | The option it points to, the easy-to-change version if you're unsure, then "Go with that?" |
 | Settled by another call | One sentence saying so |
 | End | The decisions in one breath, then "Right?" |
 
-Nothing else unprompted. The 35-second briefing, call intros listing every
-option, and "Keeping Redis." acknowledgements go.
+The 35-second briefing and the call intros that list every option go (the
+intro stays behind "you explain it"), and so do the "Keeping Redis."
+acknowledgements.
 
 ## 5. Turn-taking for thinking aloud
 
 Explaining a plan out loud is full of pauses. Today a turn ends after 1.6
 seconds of quiet, which cuts off someone thinking.
 
-- **Patience depends on what he asked.** After an open question ("What did
-  you ask Claude for?") the turn ends after 3 seconds of quiet, and only
-  when what you said sounds finished. After a yes-or-no question, 1.2
+- **Patience depends on what he asked.** After "walk me through it" the
+  turn ends after 3 seconds of quiet, and only when what you said sounds
+  finished. After a yes-or-no question, 1.2
   seconds.
 - **"Hold on" stops the clock** until you speak again.
 - **The nod.** While you talk, the duck bobs with your voice. It's the
@@ -217,9 +222,10 @@ The thing being explained: **the plan**, in the agent's own words, the way
 the duck in the anecdote looks at the code. Frank's marks sit on it: the
 calls underlined in the plan's text, receipts beside them.
 
-**Frank follows along.** When you talk about part of the plan ("the Redis
-bit"), the duck moves down the margin to that part and it's highlighted.
-When he talks about a call, he's beside it. That's the one bold thing in
+**Frank follows along.** As you walk through the plan, the duck moves
+down the margin to the part you're talking about, and it's highlighted, the
+way a listener's eyes follow your finger down the code. When he talks about
+a call, he's beside it. That's the one bold thing in
 the design: a duck in the margin of your plan, looking at what you're
 talking about, nodding while you talk.
 
@@ -310,29 +316,34 @@ Changed from that plan:
 
 ### 7.1 Engine
 
-- **Intent check**: a new turn. Input: the developer's explanation and the
-  read. Output, as JSON: Frank's one or two sentences, which calls the
-  developer covered, which they didn't mention, and any the developer
-  contradicted, with their words and the plan's.
+- **Walk-through turn**: the developer's explanation of a call goes to the
+  brain with the call, the plan's words and the files. Frank replies in one
+  or two sentences: what the explanation got wrong or skipped, with the
+  receipt, or "Right" and the fact that backs it. When the explanation
+  answered the deciding question, the reply ends with `[answer N]`, the way
+  a recommendation ends with `[option N]` today, so Frank goes straight to
+  the option it points to.
 - **The read gains** `dependsOn` per call (which calls it hangs off) and
   `settles` per option (choosing it makes another call moot, and which
   option that call takes). Removing, skipping or weakening tests is always
   a call.
+- **The briefing** names the calls instead of describing each, and ends on
+  the hardest to undo.
 - **The frontier**: open calls whose prerequisites are settled, hardest to
   undo first. Easy calls can be kept in one batch.
 - **Outcomes gain a reason**: the answer to the deciding question, or the
   developer's words, or "unknown yet". The note prints it.
-- **Commands**: "you tell me", "I don't know", "hold on", "let me think",
-  "wait, what", "say that again", "simpler", "keep the easy ones".
+- **Commands**: "you explain it", "I don't know", "hold on", "let me
+  think", "wait, what", "say that again", "simpler", "keep the easy ones".
 - **Following along**: match what the developer says against the plan's
-  lines and the calls (on-device, the same loose word matching as picking
-  a call), so the panel knows which part they're talking about.
+  lines (on-device, the same loose word matching as picking a call), so the
+  panel knows which part they're talking about.
 
 ### 7.2 Mac
 
 - **Patience per turn**: the panel tells the listener what kind of answer
-  it expects (open or yes-or-no), which sets the end-of-turn silence (3 s
-  or 1.2 s). "Hold on" suspends the end of turn until speech resumes.
+  it expects (a walk-through or a yes-or-no), which sets the end-of-turn
+  silence (3 s or 1.2 s). "Hold on" suspends the end of turn until speech resumes.
 - **Live partial transcripts** while you talk (Whisper on the audio so
   far, every second or so), for your words on screen and following along.
 - **Your voice level** drives the nod (it already drives the meter).
@@ -344,21 +355,22 @@ Changed from that plan:
 - The duck in the margin: position follows the part being discussed; the
   four states.
 - The two-line conversation strip: your words, live; his last line.
-- The new flow: opener, intent check, triage, frontier, summary and
-  confirm, note with reasons.
+- The new flow: shorter briefing, walk me through it, the gap, the
+  deciding question only if still open, frontier, summary and confirm, note
+  with reasons.
 
 ## 8. Tasks
 
 | # | Task | Done when |
 | --- | --- | --- |
-| D1 | Intent check turn, with its JSON and prompt | Engine tests: covered, unmentioned and contradicted calls on the sample and on two real plans |
-| D2 | Read: `dependsOn`, `settles`, tests always a call | Engine tests; old reads still parse |
+| D1 | Walk-through turn, its prompt and `[answer N]` | Engine tests: explanations that answer the deciding question, that miss the point, that contradict the code |
+| D2 | Read: `dependsOn`, `settles`, tests always a call; the shorter briefing | Engine tests; old reads still parse; briefing under 45 words |
 | D3 | Frontier, batch-keep for easy calls, decisions that settle others | Session tests |
 | D4 | Reasons on outcomes, printed in the note | Note tests |
-| D5 | Commands: you tell me, I don't know, hold on, wait what, simpler, keep the easy ones | Table-driven tests |
+| D5 | Commands: you explain it, I don't know, hold on, wait what, simpler, keep the easy ones | Table-driven tests |
 | D6 | Patience per turn, "hold on", live partial transcripts | Rust tests on real speech with long pauses |
-| D7 | Following along: what you're talking about, in the plan | Tests on transcripts of the sample |
-| D8 | The flow in the controller: opener, gap, triage, one question at a time, summary, confirm | A whole session by voice in controller tests, with fewer Frank words than yours |
+| D7 | Following along: which part of the plan you're talking about | Tests on transcripts of the sample |
+| D8 | The flow in the controller | A whole session by voice in controller tests, with more of the developer's words than Frank's inside calls |
 | D9 | The plan as the surface; the call unfolding in place; margin labels; the note with reasons | Screenshots, light and dark, sample and a real plan |
 | D10 | The duck in the margin: four states, following along, nodding with your voice; menu bar states | Frames reviewed at 16, 22 and 40 px; reduced motion keeps him still |
 | D11 | Tokens and type from §6.3 | No hard-coded colours; contrast checked |
