@@ -1,24 +1,30 @@
 /*
- * Frank's design tokens (docs/ux-redesign.md §6.3). Components use these and nothing
+ * Frank's design tokens (docs/ux.md §8). Components use these and nothing
  * else: no colour, font, size, radius or duration is written anywhere else.
  */
 :root {
   color-scheme: light dark;
 
-  /* Colour, from a rubber duck in water (docs/ux-redesign.md §6.3). Each
+  /* Colour, from a rubber duck in water (docs/ux.md §8.2). Each
      has one job. Duck is Frank: what he's looking at and saying, and what
      he'd pick; it never carries text (duck-ink does). Bill means one thing:
      the code disagrees with the plan. Reed is decided. */
-  --surface: #fbfcfb; /* Paper: the plan, and what sits on it */
-  --surface-sunk: #e9f0ee; /* Pond: the ground */
-  --ink: #16302b;
-  --ink-muted: #4e6460;
-  --rule: #d3dfdb;
-  --duck: #f2c230;
+  --surface: #fffef8; /* Paper: the plan, and what sits on it */
+  --surface-sunk: #e9efec; /* Pond: the ground */
+  --proof-stock: #dce1de; /* The cool stock around a working proof */
+  --ink: #102e28;
+  --ink-muted: #45605a;
+  --rule: #c5d0cc;
+  --rule-strong: #7f928c;
+  --duck: #ffc62c;
   --duck-ink: #7a5c00;
   --bill: #b83d0a;
   --reed: #276b4e;
   --on-ink: #fbfcfb;
+  --register: #ff4fa3;
+  --header: #102e28;
+  --on-header: #fffef8;
+  --header-muted: #c9d7d2;
 
   /* Type: Recursive, one family, where the style says who's speaking.
      Frank in Casual, the plan and the facts in Linear, code in Mono. */
@@ -31,9 +37,9 @@
   --voice-code: 'CASL' 0, 'MONO' 1;
   --text-meta: 11px;
   --text-code: 12px;
-  --text-body: 13px;
+  --text-body: 14px;
   --text-title: 15px;
-  --text-heading: 18px;
+  --text-heading: 19px;
   --leading-body: 1.45;
   --leading-code: 1.35;
   --weight-regular: 400;
@@ -53,9 +59,10 @@
 
   /* Shape. The panel takes the OS popover radius; insets are 6; the rest is square. */
   --radius-panel: 12px;
-  --radius-inset: 6px;
+  --radius-inset: 0;
   --hairline: 1px;
-  --focus-ring: 2px;
+  --focus-ring: 3px;
+  --demo-shadow: 0 12px 40px rgb(16 46 40 / 0.16);
 
   /* Motion. One orchestrated moment (the marks); everything else answers a key. */
   --t-open: 90ms;
@@ -69,19 +76,22 @@
   :root:not([data-theme='light']) {
     --surface: #1a3f3b;
     --surface-sunk: #123330;
+    --proof-stock: #264a45;
     --ink: #e4eeeb;
     --ink-muted: #a7bdb8;
     --rule: #2b524d;
-    --duck: #f2c230;
+    --rule-strong: #66817a;
+    --duck: #ffc62c;
     --duck-ink: #f2c230;
     --bill: #ff8a57;
     --reed: #6cc49a;
     --on-ink: #123330;
+    --register: #ff72b7;
     color-scheme: dark;
   }
 }
 
-/* The three voices, set by the type itself. */
+/* The three typographic voices, set by the type itself. */
 body {
   font-variation-settings: var(--voice-plan);
 }
@@ -90,13 +100,16 @@ body {
 :root[data-theme='dark'] {
   --surface: #1a3f3b;
   --surface-sunk: #123330;
+  --proof-stock: #264a45;
   --ink: #e4eeeb;
   --ink-muted: #a7bdb8;
   --rule: #2b524d;
-  --duck: #f2c230;
+  --rule-strong: #66817a;
+  --duck: #ffc62c;
   --duck-ink: #f2c230;
   --bill: #ff8a57;
   --reed: #6cc49a;
   --on-ink: #123330;
+  --register: #ff72b7;
   color-scheme: dark;
 }

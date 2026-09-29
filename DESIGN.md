@@ -1,6 +1,6 @@
 ---
 name: Frank
-description: Off-register print-proof design for a blunt local rubber duck
+description: A print proof with opinions, calibrated for marketing and focused work
 colors:
   proof-stock: "#dce1de"
   paper: "#f5f1e8"
@@ -60,11 +60,10 @@ components:
 
 **Creative North Star: "A print proof with opinions."**
 
-Frank's marketing world turns agent-plan review into a physical print pass. The
-page should feel like a proof pulled from a small, noisy studio: silver stock,
-dense pond-green ink, duck yellow, hot-pink misregistration, square controls,
-and marks that reveal how the work was made. The roughness is deliberate, but
-the information hierarchy remains precise.
+Frank's visual world turns agent-plan review into a physical print pass. Silver
+stock, dense pond-green ink, duck yellow, hot-pink misregistration, square
+proof surfaces, and marks that reveal how the work was made form one durable
+identity. The intensity changes by surface; the identity does not.
 
 The duck is product behavior, not mascot decoration. Frank isolates decisions,
 leaves receipts, and stamps a verdict. Visual flourishes should make that
@@ -77,6 +76,33 @@ page.
 - Large compressed type carries the blunt voice.
 - Rules, proof labels, density marks, and stamps encode review state.
 - One print-pass animation demonstrates the product's central action.
+
+## Surface Modes
+
+### Website — Persuade
+
+The marketing site is the loud print studio. It earns attention with large
+compressed type, asymmetric proofs, visible registration errors, hard offsets,
+and the full physical-print metaphor. The sections below describe this
+high-intensity expression unless stated otherwise.
+
+### Desktop app — Operate
+
+The desktop app is the quiet proof desk. It keeps the native 520px popover,
+keyboard-first flow, one-call focus, and dense reading rhythm. Personality is
+concentrated in evidence-bearing details:
+
+- dark ink proof bars for plan and settings headers;
+- square paper/proof-stock insets inside the rounded native shell;
+- yellow for Frank and the current point of attention;
+- orange only when code contradicts the plan;
+- green only for decided outcomes;
+- pink only for focus, registration offsets, and transient action;
+- small registration marks, hard offsets, and a restrained ready stamp.
+
+The app never copies the site's hero scale, rotating reading surfaces, generous
+campaign spacing, or decorative composition. Expression must clarify current
+state, evidence, or action. If it competes with the plan, it is too loud.
 
 ## Colors
 

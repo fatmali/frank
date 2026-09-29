@@ -280,7 +280,7 @@ stopping here.)
 | `S` | Something else: say what the agent should do instead |
 | `→` / `←` | Next call (this one stays as planned) / previous call |
 | `Space` | Hold: talk. Tap: talk freely (hands-free), or stop. When the composer is empty. |
-| `V` | Frank's voice: pick how he sounds, without leaving the call |
+| `V` | Frank's voice: change mode or pace without leaving the call |
 | `⌘↵` | Copy the note (from any view) |
 | `⌘P` | Switch plan, or paste one |
 | `Esc` | Back out of what's open, else close. Nothing is lost. |
@@ -388,16 +388,15 @@ counter storage, in memory. Want me to copy the note for Claude Code?"
 
 ### 6.4 His voice
 
-Frank speaks with natural voices (Kokoro-82M, on this Mac): Michael (his
-own), Heart, George, Emma, Fenrir, Bella. The voice button next to the
-microphone, or `V`, opens them in the panel: voice or chat, then each voice
-with Listen; choosing one says a line in it. A Speaking speed slider runs
-from 85% to 120% of that voice's tuned pace; 100% is roughly 15–20% faster
-than the old shared default. Coding notation is normalized only for speech,
-so API, JSON, OAuth 2.0, C++, versions, ports and identifiers sound natural
-while the original text stays on screen. The same picker is in Settings.
-There are no macOS voices: until his voice is downloaded, Frank shows text,
-and the voice bar says so with a Download button.
+Frank has one natural voice (Kokoro-82M, on this Mac), presented as **Frank**:
+British, dry, and calibrated for technical explanations. The voice button next
+to the microphone, or `V`, opens voice/chat mode, a Hear Frank preview, and a
+Speaking speed slider from 85% to 120% of his tuned pace. At 100% he speaks at
+the intended brisk default. Coding notation is normalized only for speech, so
+API, JSON, OAuth 2.0, C++, versions, ports, and identifiers sound natural while
+the original text stays on screen. The same controls are in Settings. Legacy
+saved voice names migrate to Frank automatically. Until the local voice pack is
+downloaded, Frank shows text and the voice bar offers the one-time download.
 
 ### 6.5 What it looks like
 
@@ -436,6 +435,24 @@ listen while he talks. macOS's voice-processing audio unit
 playback onto it would let Silero hear you over him, so he stops the moment
 you start talking. It starts as a spike: measure how well it cancels on
 laptop speakers first.
+
+### 6.8 Frank's sketches
+
+When the developer says or types “draw that,” “map it,” “sketch it,” or asks
+for a diagram, Frank may add one small Mermaid flowchart or sequence diagram
+after one or two short explanatory sentences. He does this only when
+relationships, order, or ownership are clearer spatially than in prose.
+
+- The explanation is primary and remains complete without the diagram.
+- A response contains at most one diagram, kept small enough to scan in the
+  panel.
+- Rendering is local, uses Mermaid strict security, and accepts only flowcharts
+  and sequence diagrams. Links, clicks, init directives, and oversized sources
+  are rejected.
+- The figure has an accessible label and its source can be expanded. A render
+  failure shows the source rather than hiding the answer.
+- Frank never requires a diagram to make a decision and never speaks Mermaid
+  syntax aloud.
 
 ## 7. Flows and states
 
@@ -493,21 +510,23 @@ it.
 
 ### 8.1 Direction
 
-Frank is a menu bar utility, so the frame should feel native and quiet: it
-lives in the OS, not on a website. The personality lives in exactly one
-place: **Frank's marks.** When Frank finds a call, he marks the plan the way
-a sharp reviewer marks a printed diff, with a handwritten number in the
-margin and an amber underline on the exact words. That's the memorable thing.
-Everything around it stays disciplined.
+Frank is a menu bar utility, so the outer frame stays native and quiet: it
+lives in the OS, not on a website. Inside that shell it is a **working proof
+desk**, the restrained sibling of the louder print-studio website. Frank marks
+the plan like a sharp reviewer marks a printed diff, using a handwritten number
+in the margin and an amber underline on the exact words. Dark proof bars,
+square paper insets, small registration marks, and occasional hard ink offsets
+give the app personality without competing with the work.
 
 Calm comes from structure, not decoration: one decision per view, a fixed
 order within it (question, the plan's words, why it matters, options, what
 it comes down to, receipts), and generous space between those parts.
 
-These choices come from Frank's own world. Rubber-duck yellow is the one
-brand colour. Pond-water greys make the neutrals. Plan and code text is
-monospace, because that's how developers read plans in the terminal where
-they came from. Frank's marks use a handwritten face, because they are
+These choices come from Frank's own world. Rubber-duck yellow marks Frank and
+current attention. Pond-water greys and paper carry the reading surfaces.
+Hot pink is registration and focus, never a second status colour. Plan and code
+text is monospace, because that's how developers read plans in the terminal
+where they came from. Frank's marks use a handwritten face, because they are
 margin notes.
 
 **What we deliberately avoid:**
@@ -515,7 +534,6 @@ margin notes.
 - Cream paper with a terracotta accent.
 - Near-black with an acid accent.
 - Stacks of identical rounded cards with soft shadows.
-- All-caps eyebrow labels, and meta strings joined with middle dots.
 - Arrows appended to buttons, gradients, glassmorphism, and emoji in the UI.
 - Green and red for good and bad options.
 
@@ -526,15 +544,17 @@ carried by colour alone: outcomes are also words ("kept", "changed").
 
 | Token | Light | Dark | Use |
 | --- | --- | --- | --- |
-| `surface-sunk` (Pond) | `#E9F0EE` | `#123330` | The panel's ground |
-| `surface` (Paper) | `#FBFCFB` | `#1A3F3B` | The plan, and what sits on it |
-| `ink` | `#16302B` | `#E4EEEB` | Text |
-| `ink-muted` | `#4E6460` | `#A7BDB8` | Secondary text |
-| `rule` | `#D3DFDB` | `#2B524D` | Edges |
-| `duck` | `#F2C230` | `#F2C230` | Frank: what he's looking at and saying, and what he'd pick. Never carries text. |
+| `surface-sunk` (Pond) | `#E9EFEC` | `#123330` | The panel's ground |
+| `surface` (Paper) | `#FFFEF8` | `#1A3F3B` | The plan, and what sits on it |
+| `proof-stock` | `#DCE1DE` | `#264A45` | Working proof fields and evidence |
+| `ink` | `#102E28` | `#E4EEEB` | Text and proof bars |
+| `ink-muted` | `#45605A` | `#A7BDB8` | Secondary text |
+| `rule` | `#C5D0CC` | `#2B524D` | Edges |
+| `duck` | `#FFC62C` | `#FFC62C` | Frank: what he's looking at and saying, and what he'd pick. Never carries text. |
 | `duck-ink` | `#7A5C00` | `#F2C230` | Frank's colour as text |
 | `bill` | `#B83D0A` | `#FF8A57` | The code disagrees with the plan, only |
 | `reed` | `#276B4E` | `#6CC49A` | Decided |
+| `register` | `#FF4FA3` | `#FF72B7` | Focus, ink offset, and transient action |
 
 Every text pair is 4.9:1 or better on Paper and on Pond in both themes;
 ink on duck is 8.4:1. Frank follows the system light or dark appearance.
@@ -551,8 +571,8 @@ speaking:
 | Code | Mono (`MONO 1`) | File paths, identifiers, code |
 | You | Linear, italic | What you said, as heard |
 
-Scale (px): **11** for metadata, **13** for body, **15** for titles and
-option labels, **18** for the gist and a call's question. Line height is
+Scale (px): **11** for metadata, **14** for body, **15** for titles and
+option labels, **19** for the gist and a call's question. Line height is
 1.45. Weights are regular and semibold only.
 
 ### 8.4 Space, shape, depth
@@ -560,11 +580,12 @@ option labels, **18** for the gist and a call's question. Line height is
 - **Grid.** 4 pt base; panel padding 16; gaps between regions 12; list rows
   36 pt. Within a call, 16 pt between its parts, so each reads as its own
   step.
-- **Radius.** The panel uses the OS popover radius (10–12). Evidence blocks
-  and the composer use 6. Everything else is square. Hierarchy comes from
+- **Radius.** The panel uses the OS popover radius (10–12). Internal proof
+  surfaces are square. Hierarchy comes from
   rules, indentation and space, not from boxing things in cards.
-- **Depth.** Only the panel casts a shadow (the native one). Nothing inside
-  it floats.
+- **Depth.** Reading surfaces stay flat. Primary actions and a few completed
+  proof objects may use small hard pink/yellow ink offsets; never soft card
+  shadows.
 
 ### 8.5 Iconography
 

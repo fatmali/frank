@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
+import { DuckMark } from '../DuckMark.tsx';
 import { voiceMode, type Config, type VoiceChoice, type VoiceMode } from '../host.ts';
 import { useController, usePanel } from './store.ts';
 
 /**
- * How Frank works with you, and how he sounds: voice first or chat, and
- * which of his voices. Choosing a voice says a line in it. In Settings, and
- * in the panel (the voice button).
+ * How Frank works with you, and how he sounds: voice first or chat, with a
+ * pace control for his one canonical voice.
  */
 export function VoicePicker() {
   const c = useController();
@@ -25,10 +25,8 @@ export function VoicePicker() {
   }, [savedPace]);
   if (!config) return null;
 
-  const ready = voices.some((v) => v.installed);
-  // Anything unknown, like a macOS voice from before, is his own voice.
-  const saved = config.voice?.name ?? '';
-  const chosen = voices.some((v) => v.id === saved) ? saved : (voices[0]?.id ?? '');
+  const voice = voices[0];
+  const ready = voice?.installed ?? false;
   const mode = voiceMode(config);
   const megabytes = packs?.voices.megabytes || 212;
 
@@ -38,10 +36,6 @@ export function VoicePicker() {
   };
   const setMode = (m: VoiceMode) =>
     void save({ ...config, voice: { ...config.voice, mode: m } });
-  const setVoice = (name: string) =>
-    void save({ ...config, voice: { ...config.voice, name } }).then(() => {
-      void c.host.previewVoice(name);
-    });
   const commitPace = (next: number) => {
     setPace(next);
     if (committedPace.current === next) return;
@@ -50,7 +44,7 @@ export function VoicePicker() {
       ...config,
       voice: { ...config.voice, pace_percent: next },
     }).then(() => {
-      if (ready && chosen) void c.host.previewVoice(chosen);
+      if (ready && voice) void c.host.previewVoice(voice.id);
     });
   };
 
@@ -81,30 +75,21 @@ export function VoicePicker() {
       </fieldset>
       <fieldset className="voice-picker">
         <legend>His voice</legend>
-        {voices.map((v) => (
-          <div key={v.id} className="voice-row">
-            <label>
-              <input
-                type="radio"
-                name="voice"
-                value={v.id}
-                disabled={!v.installed}
-                checked={chosen === v.id}
-                onChange={() => setVoice(v.id)}
-              />
-              <span>{v.name}</span>
-              <span className="quiet">{v.description}</span>
-            </label>
-            {v.installed && (
-              <button
-                className="text-button"
-                onClick={() => void c.host.previewVoice(v.id)}
-              >
-                Listen
-              </button>
-            )}
+        {voice && (
+          <div className="voice-identity">
+            <DuckMark size={26} className="duck" />
+            <strong>{voice.name}</strong>
+            <small>{voice.description}</small>
+            <button
+              type="button"
+              className="text-button"
+              disabled={!voice.installed}
+              onClick={() => void c.host.previewVoice(voice.id)}
+            >
+              Hear Frank
+            </button>
           </div>
-        ))}
+        )}
         <div className="voice-speed">
           <label htmlFor="voice-speed">
             <span>Speaking speed</span>
@@ -132,8 +117,8 @@ export function VoicePicker() {
           (downloading === undefined ? (
             <div className="voice-download">
               <p className="quiet">
-                Frank's voices run on this Mac and sound like a person, not a screen
-                reader. They're a one-time download.
+                Frank's voice runs on this Mac and sounds like a person, not a screen
+                reader. It's a one-time download.
               </p>
               <button className="button" onClick={() => void c.downloadPack('voices')}>
                 Download his voice, {megabytes} MB
@@ -142,7 +127,10 @@ export function VoicePicker() {
           ) : (
             <p className="voice-download quiet" role="status">
               Downloading his voice, {Math.round(downloading * 100)}%
-              <span className="download-bar" style={{ width: `${downloading * 100}%` }} />
+              <span
+                className="download-bar"
+                style={{ transform: `scaleX(${downloading})` }}
+              />
             </p>
           ))}
       </fieldset>

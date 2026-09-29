@@ -45,7 +45,7 @@ struct Line {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VoiceChoice {
-    /// What goes in the config: `natural:am_michael`.
+    /// What goes in the config: `natural:bm_george`.
     pub id: String,
     pub name: String,
     pub description: String,
@@ -67,14 +67,10 @@ pub fn choices() -> Vec<VoiceChoice> {
         .collect()
 }
 
-/// The Kokoro voice a setting means. Anything unknown, including the macOS
-/// voices Frank used to have, is Frank's own voice.
+/// The Kokoro voice a setting means. Legacy natural and macOS selectors all
+/// mean Frank's canonical voice.
 fn resolve(setting: &str) -> &'static str {
-    let id = setting.strip_prefix("natural:").unwrap_or(setting);
-    kokoro::VOICES
-        .iter()
-        .find(|voice| voice.id == id)
-        .map_or(kokoro::DEFAULT_VOICE, |voice| voice.id)
+    kokoro::canonical_voice(setting)
 }
 
 /// Splits a sentence so the first sound comes sooner: a long sentence is
@@ -277,22 +273,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn every_setting_means_a_natural_voice() {
-        assert_eq!(resolve(""), "am_michael");
-        assert_eq!(resolve("natural:af_heart"), "af_heart");
-        assert_eq!(resolve("bf_emma"), "bf_emma");
-        // The macOS voices are gone; whoever chose one hears Frank's own.
-        assert_eq!(resolve("system:Ava (Premium)"), "am_michael");
-        assert_eq!(resolve("Samantha"), "am_michael");
-        assert_eq!(resolve("natural:nobody"), "am_michael");
+    fn every_setting_means_franks_canonical_voice() {
+        for setting in [
+            "",
+            "natural:am_michael",
+            "af_heart",
+            "natural:bm_george",
+            "system:Ava (Premium)",
+            "Samantha",
+            "natural:nobody",
+        ] {
+            assert_eq!(resolve(setting), "bm_george");
+        }
     }
 
     #[test]
-    fn offers_only_natural_voices() {
-        let ids: Vec<_> = choices().into_iter().map(|v| v.id).collect();
-        assert_eq!(ids.len(), kokoro::VOICES.len());
-        assert!(ids.iter().all(|id| id.starts_with("natural:")));
-        assert_eq!(ids[0], "natural:am_michael");
+    fn offers_only_frank() {
+        let choices = choices();
+        assert_eq!(choices.len(), 1);
+        assert_eq!(choices[0].id, "natural:bm_george");
+        assert_eq!(choices[0].id, frank_core::config::CANONICAL_VOICE_SETTING);
+        assert_eq!(choices[0].name, "Frank");
+        assert_eq!(choices[0].description, "British, dry");
     }
 
     #[test]

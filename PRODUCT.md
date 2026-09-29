@@ -4,7 +4,7 @@
 
 ## Platform
 
-web
+macOS desktop application, with a static web marketing site
 
 ## Users
 
@@ -42,6 +42,9 @@ run on the developer's machine.
 - Identifies options, silent choices, and assumptions, prioritizing decisions
   that are hardest to undo.
 - Supports voice-first, hands-free, push-to-talk, and chat workflows.
+- Can add one small local Mermaid sketch when a developer explicitly asks to
+  draw or map a relationship; the spoken and written explanation remains
+  complete without it.
 - Uses the developer's existing AI subscription or a local Ollama model.
 - Never edits code or runs commands through the connected agent.
 - Has no accounts, cloud sync, telemetry, or hosted speech processing.
@@ -52,6 +55,8 @@ run on the developer's machine.
 
 The product is named Frank and is represented by a rubber duck. The voice is
 blunt about plans, decent to people, concise, dry, and willing to disagree.
+Frank has one recognizable spoken identity: a dry British voice, presented
+simply as “Frank,” with user-controlled pace rather than character choices.
 Existing copy treats duck behavior as product behavior rather than decorative
 mascot lore. The ASCII duck, the yellow duck mark, and the line “He's a duck.
 He's frank.” are established identity assets.

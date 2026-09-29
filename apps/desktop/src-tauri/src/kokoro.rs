@@ -27,54 +27,27 @@ pub struct VoiceProfile {
     pub base_speed: f32,
 }
 
-/// Each voice is tuned separately; the old shared speed of 1.0 was too slow.
-pub const VOICES: &[VoiceProfile] = &[
-    VoiceProfile {
-        id: "am_michael",
-        name: "Michael",
-        description: "American, calm",
-        base_speed: 1.26,
-    },
-    VoiceProfile {
-        id: "af_heart",
-        name: "Heart",
-        description: "American, warm",
-        base_speed: 1.25,
-    },
-    VoiceProfile {
-        id: "bm_george",
-        name: "George",
-        description: "British, dry",
-        base_speed: 1.26,
-    },
-    VoiceProfile {
-        id: "bf_emma",
-        name: "Emma",
-        description: "British, clear",
-        base_speed: 1.25,
-    },
-    VoiceProfile {
-        id: "am_fenrir",
-        name: "Fenrir",
-        description: "American, deep",
-        base_speed: 1.27,
-    },
-    VoiceProfile {
-        id: "af_bella",
-        name: "Bella",
-        description: "American, bright",
-        base_speed: 1.25,
-    },
-];
-pub const DEFAULT_VOICE: &str = "am_michael";
+pub const DEFAULT_VOICE: &str = "bm_george";
+pub const VOICES: &[VoiceProfile] = &[VoiceProfile {
+    id: DEFAULT_VOICE,
+    name: "Frank",
+    description: "British, dry",
+    base_speed: 1.26,
+}];
 const MIN_MODEL_SPEED: f32 = 0.85;
 const MAX_MODEL_SPEED: f32 = 1.50;
 
+/// Every saved or requested selector means Frank's one canonical model voice.
+pub fn canonical_voice(_id: &str) -> &'static str {
+    DEFAULT_VOICE
+}
+
 pub fn profile(id: &str) -> &'static VoiceProfile {
+    let id = canonical_voice(id);
     VOICES
         .iter()
         .find(|voice| voice.id == id)
-        .unwrap_or(&VOICES[0])
+        .expect("the canonical voice has a profile")
 }
 
 pub fn effective_speed(id: &str, pace_percent: u16) -> f32 {
@@ -121,9 +94,8 @@ impl Kokoro {
         ids.truncate(MAX_TOKENS - 2);
         let styles = self
             .voices
-            .get(voice)
-            .or_else(|| self.voices.get(DEFAULT_VOICE))
-            .ok_or("no voices loaded")?;
+            .get(canonical_voice(voice))
+            .ok_or("Frank's voice isn't loaded")?;
         // The style row depends on how long the input is.
         let row = ids.len().min(styles.len() / STYLE - 1);
         let style = styles[row * STYLE..(row + 1) * STYLE].to_vec();
@@ -329,15 +301,26 @@ mod tests {
     }
 
     #[test]
-    fn every_voice_has_a_faster_tuned_default() {
-        for voice in VOICES {
-            assert!(
-                (1.25..=1.27).contains(&voice.base_speed),
-                "{} has an unexpected base speed",
-                voice.id
-            );
+    fn legacy_voice_ids_resolve_to_frank() {
+        for voice in [
+            "",
+            "am_michael",
+            "natural:af_heart",
+            "bf_emma",
+            "system:Ava (Premium)",
+            "nobody",
+        ] {
+            assert_eq!(canonical_voice(voice), "bm_george");
+            assert_eq!(profile(voice).id, "bm_george");
         }
+    }
+
+    #[test]
+    fn frank_has_a_faster_tuned_default() {
+        assert_eq!(VOICES.len(), 1);
+        assert_eq!(VOICES[0].name, "Frank");
         assert!((effective_speed(DEFAULT_VOICE, 100) - 1.26).abs() < 0.001);
+        assert!((effective_speed("natural:am_michael", 100) - 1.26).abs() < 0.001);
         assert!(effective_speed(DEFAULT_VOICE, 85) < effective_speed(DEFAULT_VOICE, 100));
         assert!(effective_speed(DEFAULT_VOICE, 120) > effective_speed(DEFAULT_VOICE, 100));
         assert_eq!(effective_speed(DEFAULT_VOICE, u16::MAX), MAX_MODEL_SPEED);

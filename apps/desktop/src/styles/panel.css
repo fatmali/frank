@@ -58,7 +58,8 @@ kbd {
   display: flex;
   flex-direction: column;
   background: var(--surface);
-  border: var(--hairline) solid var(--rule);
+  border: 2px solid var(--header);
+  border-top-width: 4px;
   border-radius: var(--radius-panel);
   overflow: hidden;
 }
@@ -102,7 +103,7 @@ kbd {
   height: 28px;
   padding: 0 var(--space-2);
   white-space: nowrap;
-  border: var(--hairline) solid var(--rule);
+  border: 1.5px solid var(--rule-strong);
   background: var(--surface);
   color: var(--ink);
   font-weight: var(--weight-strong);
@@ -127,11 +128,22 @@ kbd {
   background: var(--ink);
   border-color: var(--ink);
   color: var(--on-ink);
+  box-shadow: 3px 3px 0 var(--register);
+  transition:
+    transform var(--t-open) var(--ease),
+    box-shadow var(--t-open) var(--ease);
 }
 
 .button.primary:hover:not(:disabled) {
   background: var(--ink);
-  opacity: 0.88;
+  opacity: 1;
+  transform: translate(1px, 1px);
+  box-shadow: 2px 2px 0 var(--register);
+}
+
+.button.primary:active:not(:disabled) {
+  transform: translate(3px, 3px);
+  box-shadow: none;
 }
 
 .button.primary .kbd {
@@ -190,7 +202,10 @@ select {
   align-items: center;
   gap: 0 var(--space-2);
   padding: var(--space-3) var(--space-4);
-  border-bottom: var(--hairline) solid var(--rule);
+  border-bottom: 3px solid var(--duck);
+  color: var(--on-header);
+  background: var(--header);
+  box-shadow: inset 0 -1px var(--register);
 }
 
 .plan-header .duck {
@@ -233,6 +248,15 @@ select {
   color: var(--ink-muted);
 }
 
+.plan-header .meta {
+  color: var(--header-muted);
+}
+
+.plan-header .kbd {
+  border-color: var(--header-muted);
+  color: var(--on-header);
+}
+
 .newer {
   grid-column: 2 / -1;
   display: flex;
@@ -240,7 +264,7 @@ select {
   align-items: center;
   margin-top: var(--space-2);
   padding-top: var(--space-2);
-  border-top: var(--hairline) solid var(--rule);
+  border-top: var(--hairline) solid var(--header-muted);
 }
 
 /* ---------------------------------------------------------------- plans home */
@@ -275,7 +299,9 @@ select {
 }
 
 .plan-row[aria-current='true'] {
-  box-shadow: inset 3px 0 var(--duck);
+  box-shadow:
+    inset 4px 0 var(--duck),
+    inset 6px 0 var(--register);
 }
 
 .plan-number {
@@ -493,6 +519,7 @@ select {
 
 .segment[aria-current='true'] {
   background-image: linear-gradient(var(--duck), var(--duck));
+  box-shadow: 0 3px 0 var(--register);
 }
 
 .rail .meta:last-child,
@@ -545,7 +572,7 @@ select {
 }
 
 .evidence {
-  border-radius: var(--radius-inset);
+  border: var(--hairline) solid var(--rule);
   background: var(--surface-sunk);
 }
 
@@ -640,9 +667,10 @@ select {
 .plan-text {
   margin-top: var(--space-3);
   padding: var(--space-3) 0;
-  border-radius: var(--radius-inset);
   background: var(--surface);
-  box-shadow: 0 0 0 var(--hairline) var(--rule);
+  box-shadow:
+    0 0 0 var(--hairline) var(--rule-strong),
+    4px 4px 0 var(--proof-stock);
 }
 
 .plan-line {
@@ -716,7 +744,9 @@ mark.plan-mark {
 
 .plan-mark.current {
   background: color-mix(in srgb, var(--duck) 30%, transparent);
-  box-shadow: 0 2px 0 var(--duck);
+  box-shadow:
+    0 2px 0 var(--duck),
+    0 4px 0 var(--register);
 }
 
 .plan-note {
@@ -756,6 +786,29 @@ mark.plan-mark {
 
 .margin-duck svg {
   display: block;
+}
+
+.margin-duck::after {
+  position: absolute;
+  top: -9px;
+  right: -9px;
+  color: var(--register);
+  font-family: var(--font-code);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-strong);
+  line-height: 1;
+}
+
+.margin-duck.listening::after {
+  content: ')))';
+}
+
+.margin-duck.thinking::after {
+  content: '...';
+}
+
+.margin-duck.waiting::after {
+  content: '—';
 }
 
 /* Listening: nodding with your voice. */
@@ -849,8 +902,7 @@ mark.plan-mark {
   flex-direction: column;
   gap: 2px;
   padding: var(--space-3);
-  border: var(--hairline) solid var(--rule);
-  border-radius: var(--radius-inset);
+  border: 1.5px solid var(--rule-strong);
   background: var(--surface);
   color: var(--ink);
   text-align: left;
@@ -860,7 +912,9 @@ mark.plan-mark {
 .side:hover:not(:disabled),
 .side[data-lit] {
   border-color: var(--duck);
-  box-shadow: inset 0 3px 0 var(--duck);
+  box-shadow:
+    inset 0 3px 0 var(--duck),
+    3px 3px 0 var(--register);
 }
 
 .side[aria-pressed='true'] {
@@ -932,7 +986,7 @@ mark.plan-mark {
   gap: var(--space-2);
   padding: var(--space-1) var(--space-3);
   border: var(--hairline) solid var(--rule);
-  border-radius: 999px;
+  border-radius: var(--radius-inset);
   background: var(--surface);
   color: var(--ink);
   cursor: pointer;
@@ -1046,11 +1100,93 @@ mark.plan-mark {
 .md-code {
   margin: 0;
   padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-inset);
+  border: var(--hairline) solid var(--rule);
   background: var(--surface-sunk);
   font-size: var(--text-code);
   line-height: var(--leading-code);
   white-space: pre-wrap;
+}
+
+/* Frank draws only small flow and sequence sketches. The source is always
+   available, so a failed render never hides the explanation. */
+.frank-sketch {
+  margin: var(--space-3) 0 0;
+  border: 1.5px solid var(--ink);
+  background: var(--surface);
+  box-shadow:
+    4px 4px 0 var(--duck),
+    7px 7px 0 var(--register);
+}
+
+.frank-sketch figcaption {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  color: var(--on-header);
+  background: var(--header);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-strong);
+}
+
+.frank-sketch figcaption .quiet {
+  color: var(--header-muted);
+  font-weight: var(--weight-regular);
+}
+
+.frank-sketch-canvas {
+  display: grid;
+  place-items: center;
+  min-height: 120px;
+  padding: var(--space-3);
+  overflow-x: auto;
+}
+
+.frank-sketch-canvas svg {
+  display: block;
+  width: 100%;
+  min-width: 300px;
+  max-height: 280px;
+}
+
+.frank-sketch-loading,
+.frank-sketch-error {
+  padding: var(--space-4);
+}
+
+.frank-sketch-loading::after {
+  content: '…';
+  display: inline-block;
+  width: 1ch;
+  overflow: hidden;
+  vertical-align: bottom;
+  animation: ellipsis 1.2s steps(4, end) infinite;
+}
+
+.frank-sketch-error {
+  color: var(--bill);
+}
+
+.frank-sketch-source {
+  border-top: var(--hairline) solid var(--rule);
+  font-size: var(--text-meta);
+}
+
+.frank-sketch-source summary {
+  padding: var(--space-2) var(--space-3);
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+.frank-sketch-source pre {
+  max-height: 160px;
+  margin: 0;
+  padding: 0 var(--space-3) var(--space-3);
+  overflow: auto;
+  font-size: var(--text-code);
+  white-space: pre-wrap;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .compare {
@@ -1096,13 +1232,25 @@ mark.plan-mark {
 .note-preview pre {
   margin: var(--space-1) 0 0;
   padding: var(--space-3);
-  border-radius: var(--radius-inset);
+  border: 1.5px solid var(--ink);
   background: var(--surface-sunk);
   font-size: var(--text-code);
   line-height: var(--leading-code);
   white-space: pre-wrap;
   -webkit-user-select: text;
   user-select: text;
+}
+
+.note-preview h2::after {
+  content: 'READY';
+  display: inline-block;
+  margin-left: var(--space-2);
+  padding: 1px var(--space-1);
+  border: var(--hairline) solid var(--reed);
+  color: var(--reed);
+  font-family: var(--font-code);
+  font-size: var(--text-meta);
+  transform: rotate(-2deg);
 }
 
 @keyframes note-open {
@@ -1222,8 +1370,9 @@ mark.plan-mark {
   flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
-  border-top: var(--hairline) solid var(--rule);
-  background: var(--surface-sunk);
+  border-top: 3px solid var(--duck);
+  background: var(--proof-stock);
+  box-shadow: inset 0 1px var(--register);
 }
 
 .voice-menu-head {
@@ -1273,9 +1422,10 @@ mark.plan-mark {
 
 .meter span {
   width: 3px;
-  min-height: 2px;
+  height: 100%;
   background: var(--duck);
-  transition: height 60ms linear;
+  transform-origin: center bottom;
+  transition: transform 60ms linear;
 }
 
 .voice-status.hands-free {
@@ -1324,9 +1474,11 @@ mark.plan-mark {
   position: absolute;
   left: 0;
   bottom: 0;
+  width: 100%;
   height: 2px;
   background: var(--duck);
-  transition: width var(--t-note) var(--ease);
+  transform-origin: left;
+  transition: transform var(--t-note) var(--ease);
 }
 
 .voice-consent {
@@ -1584,6 +1736,21 @@ mark.plan-mark {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin: calc(-1 * var(--space-4)) calc(-1 * var(--space-4)) 0;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 3px solid var(--duck);
+  color: var(--on-header);
+  background: var(--header);
+  box-shadow: inset 0 -1px var(--register);
+}
+
+.settings-head .text-button {
+  color: var(--duck);
+}
+
+.settings-head .kbd {
+  border-color: var(--header-muted);
+  color: var(--on-header);
 }
 
 .settings > section {
@@ -1672,6 +1839,39 @@ mark.plan-mark {
   color: var(--ink-muted);
 }
 
+.voice-identity {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: var(--space-1) var(--space-2);
+  align-items: center;
+  min-height: 48px;
+  padding: var(--space-2) var(--space-3);
+  border: 1.5px solid var(--ink);
+  background: var(--surface);
+  box-shadow: 3px 3px 0 var(--duck);
+}
+
+.voice-identity .duck {
+  grid-row: 1 / 3;
+  color: var(--duck);
+  filter: drop-shadow(2px 1px 0 var(--register));
+}
+
+.voice-identity strong {
+  align-self: end;
+}
+
+.voice-identity small {
+  align-self: start;
+  font-size: var(--text-meta);
+  color: var(--ink-muted);
+}
+
+.voice-identity .text-button {
+  grid-column: 3;
+  grid-row: 1 / 3;
+}
+
 .voice-speed {
   display: grid;
   gap: 2px;
@@ -1696,7 +1896,7 @@ mark.plan-mark {
 }
 
 .voice-speed-labels {
-  font-size: var(--font-small);
+  font-size: var(--text-meta);
 }
 
 .voice-download {
@@ -1776,7 +1976,7 @@ mark.plan-mark {
 .demo .panel {
   width: 100%;
   max-width: var(--panel-width);
-  box-shadow: 0 12px 40px rgb(0 0 0 / 0.16);
+  box-shadow: var(--demo-shadow);
 }
 
 .demo-intro {

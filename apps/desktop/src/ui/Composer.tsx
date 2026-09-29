@@ -74,7 +74,10 @@ function Meter({ levels }: { levels: number[] }) {
   return (
     <span className="meter" aria-hidden="true">
       {levels.map((l, i) => (
-        <span key={i} style={{ height: `${Math.max(8, Math.min(1, l * 1.6) * 100)}%` }} />
+        <span
+          key={i}
+          style={{ transform: `scaleY(${Math.max(0.08, Math.min(1, l * 1.6))})` }}
+        />
       ))}
     </span>
   );
@@ -170,7 +173,7 @@ export const Composer = forwardRef<ComposerHandle>(function Composer(_, ref) {
     return (
       <div className="composer voice-status" role="status">
         <span>Downloading the speech models, {Math.round(listening * 100)}%</span>
-        <span className="download-bar" style={{ width: `${listening * 100}%` }} />
+        <span className="download-bar" style={{ transform: `scaleX(${listening})` }} />
       </div>
     );
   }
@@ -347,8 +350,8 @@ export const Composer = forwardRef<ComposerHandle>(function Composer(_, ref) {
       : view.name === 'plans'
         ? 'Paste a plan here, or drop a file'
         : view.name === 'call'
-          ? 'Ask about this. Hold Space to talk, tap it to talk freely'
-          : `Ask about the plan, or hold ${hotkey} to talk`;
+          ? 'Ask about this, or say “draw that”. Hold Space to talk'
+          : `Ask about the plan, or say “draw that”. Hold ${hotkey} to talk`;
 
   const send = () => {
     const t = text.trim();

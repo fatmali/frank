@@ -42,9 +42,9 @@ export interface Config {
   };
 }
 
-/** A voice Frank can speak with. They run on this Mac once the voice pack is downloaded. */
+/** Frank's canonical local voice. Kept as a list-shaped API for host compatibility. */
 export interface VoiceChoice {
-  /** What goes in `config.voice.name`: `natural:am_michael`. */
+  /** What goes in `config.voice.name`: `natural:bm_george`. */
   id: string;
   name: string;
   description: string;

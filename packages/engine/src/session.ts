@@ -9,7 +9,7 @@ import type { Brain, BrainRequest, Call, Context, Outcome, Turn } from './types.
  */
 /** Added to what the developer said out loud: the answer will be heard, not read. */
 const SPOKEN =
-  '(I said this out loud and will hear your answer. Reply in one or two short spoken sentences: no lists, tables, code or file paths.)';
+  '(I said this out loud and will hear your answer. Reply in one or two short spoken sentences: no lists, tables, code or file paths. If I explicitly asked you to draw, sketch, map or diagram it, you may add one small Mermaid diagram after those sentences; it will be shown, not spoken.)';
 
 export class Session {
   readonly context: Context;

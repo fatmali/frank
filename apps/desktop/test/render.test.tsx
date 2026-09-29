@@ -15,6 +15,8 @@ import { PlansHome } from '../src/ui/PlansHome.tsx';
 import { PlanText } from '../src/ui/PlanText.tsx';
 import { TheRead } from '../src/ui/TheRead.tsx';
 import { ControllerContext } from '../src/ui/store.ts';
+import { Markdown } from '../src/Markdown.tsx';
+import { sketchError } from '../src/ui/FrankSketch.tsx';
 
 /** A controller that has read the sample plan. */
 async function afterTheRead(opts: Parameters<typeof demoHost>[0] = {}) {
@@ -290,6 +292,53 @@ describe('the voice bar', () => {
     expect(bar({ voice: { state: 'off' }, handsFree: undefined })).toBe(
       'Tap Space to talk',
     );
+  });
+
+  describe("Frank's sketches", () => {
+    it('accepts only small flowcharts and sequence diagrams without active directives', () => {
+      expect(sketchError('flowchart TB\n  Plan --> Decision')).toBeUndefined();
+      expect(
+        sketchError('sequenceDiagram\n  Developer->>Frank: Draw that'),
+      ).toBeUndefined();
+      expect(sketchError('classDiagram\n  Plan <|-- Decision')).toBe(
+        'Frank can draw flowcharts and sequence diagrams here.',
+      );
+      expect(sketchError('flowchart TB\n  click Plan "https://example.com"')).toBe(
+        'The sketch used an unsupported directive.',
+      );
+      expect(sketchError(`flowchart TB\n  A --> B\n${'x'.repeat(4_000)}`)).toBe(
+        'The sketch was too large to draw.',
+      );
+    });
+
+    it('turns Mermaid fences into a local accessible sketch', () => {
+      const html = renderToStaticMarkup(
+        <Markdown
+          text={[
+            'The health check skips the limiter.',
+            '',
+            '```mermaid',
+            'flowchart LR',
+            '  Client --> Limiter --> API',
+            '  Health --> API',
+            '```',
+          ].join('\n')}
+        />,
+      );
+      expect(html).toContain('The health check skips the limiter.');
+      expect(html).toContain('class="frank-sketch drawing"');
+      expect(html).toContain('aria-label="Frank&#x27;s sketch"');
+      expect(html).toContain('flowchart LR');
+      expect(html).not.toContain('class="md-code"');
+    });
+
+    it('keeps ordinary code fences as code', () => {
+      const html = renderToStaticMarkup(
+        <Markdown text={'```ts\nconst port = 3000;\n```'} />,
+      );
+      expect(html).toContain('class="md-code"');
+      expect(html).not.toContain('frank-sketch');
+    });
   });
 
   it('shows the last thing each of you said', async () => {

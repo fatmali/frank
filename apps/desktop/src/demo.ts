@@ -213,6 +213,18 @@ export function demoReply(request: BrainRequest): string {
     return (
       TAKES[take[1]!] ?? "The plan's choice. Nothing here argues against it.\n[option 1]"
     );
+  if (/\b(draw|diagram|map|sketch)\b/i.test(last))
+    return [
+      'Here is the authentication handoff at a glance.',
+      '',
+      '```mermaid',
+      'flowchart TB',
+      '  Browser["Browser"] -->|"sign in"| API["API"]',
+      '  API -->|"verify password"| Store[("Users")]',
+      '  API -->|"issue JWT"| Browser',
+      '  Browser -->|"bearer token"| Route["Protected route"]',
+      '```',
+    ].join('\n');
   if (/scale|later|grow/i.test(last))
     return "Then build for today. Swapping the store later is a small change; running Redis you don't need isn't.\n[option 2]";
   if (/why/i.test(last))
@@ -523,15 +535,13 @@ export function demoHost(
     },
     async listVoices() {
       return [
-        ['am_michael', 'Michael', 'American, calm'],
-        ['af_heart', 'Heart', 'American, warm'],
-        ['bm_george', 'George', 'British, dry'],
-      ].map(([id, name, description]) => ({
-        id: `natural:${id}`,
-        name: name!,
-        description: description!,
-        installed: hasNatural,
-      }));
+        {
+          id: 'natural:bm_george',
+          name: 'Frank',
+          description: 'British, dry',
+          installed: hasNatural,
+        },
+      ];
     },
     async previewVoice(name) {
       log(`preview ${name}`);

@@ -4,6 +4,8 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+pub const CANONICAL_VOICE_SETTING: &str = "natural:bm_george";
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
@@ -24,7 +26,7 @@ pub struct VoiceConfig {
     pub mode: String,
     /// Before modes: `never` meant chat; anything else means voice.
     pub talk_back: String,
-    /// The voice Frank speaks with, `natural:<id>`. Empty: his own.
+    /// A legacy persisted voice selector. Empty or any older value means Frank.
     pub name: String,
     /// Relative to the selected voice's tuned pace. 100 is its natural default.
     pub pace_percent: u16,
@@ -37,6 +39,12 @@ impl VoiceConfig {
             "voice" | "chat" => &self.mode,
             _ if self.talk_back == "never" => "chat",
             _ => "voice",
+        }
+    }
+
+    fn normalize(&mut self) {
+        if !self.name.is_empty() {
+            CANONICAL_VOICE_SETTING.clone_into(&mut self.name);
         }
     }
 }
@@ -153,13 +161,22 @@ pub fn config_path() -> PathBuf {
 }
 
 impl Config {
+    fn normalize(&mut self) {
+        self.voice.normalize();
+    }
+
     /// Loads the config, or the defaults if the file doesn't exist yet.
     pub fn load(path: &Path) -> Result<Self, ConfigError> {
         match std::fs::read_to_string(path) {
-            Ok(text) => toml::from_str(&text).map_err(|source| ConfigError::Parse {
-                path: path.into(),
-                source,
-            }),
+            Ok(text) => {
+                let mut config: Self =
+                    toml::from_str(&text).map_err(|source| ConfigError::Parse {
+                        path: path.into(),
+                        source,
+                    })?;
+                config.normalize();
+                Ok(config)
+            }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
             Err(source) => Err(ConfigError::Read {
                 path: path.into(),
@@ -177,7 +194,9 @@ impl Config {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir).map_err(write_err)?;
         }
-        let text = toml::to_string_pretty(self).expect("config always serializes");
+        let mut normalized = self.clone();
+        normalized.normalize();
+        let text = toml::to_string_pretty(&normalized).expect("config always serializes");
         let tmp = path.with_extension("toml.tmp");
         std::fs::write(&tmp, text).map_err(write_err)?;
         std::fs::rename(&tmp, path).map_err(write_err)
@@ -219,6 +238,41 @@ mod tests {
             config.voice.pace_percent, 100,
             "older configs get the tuned pace"
         );
+    }
+
+    #[test]
+    fn legacy_voice_names_normalize_without_changing_mode_or_pace() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(
+            &path,
+            "[voice]\nmode = \"chat\"\nname = \"natural:af_heart\"\npace_percent = 87\n",
+        )
+        .unwrap();
+
+        let config = Config::load(&path).unwrap();
+        assert_eq!(config.voice.name, CANONICAL_VOICE_SETTING);
+        assert_eq!(config.voice.mode(), "chat");
+        assert_eq!(config.voice.pace_percent, 87);
+
+        config.save(&path).unwrap();
+        assert_eq!(Config::load(&path).unwrap(), config);
+    }
+
+    #[test]
+    fn saving_a_legacy_voice_name_migrates_the_persisted_value() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let mut config = Config::default();
+        config.voice.name = "system:Ava (Premium)".into();
+        config.voice.mode = "voice".into();
+        config.voice.pace_percent = 112;
+
+        config.save(&path).unwrap();
+        let saved = Config::load(&path).unwrap();
+        assert_eq!(saved.voice.name, CANONICAL_VOICE_SETTING);
+        assert_eq!(saved.voice.mode, "voice");
+        assert_eq!(saved.voice.pace_percent, 112);
     }
 
     #[test]

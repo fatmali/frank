@@ -4,6 +4,7 @@
  * directly; brain output never becomes HTML.
  */
 import type { ReactNode } from 'react';
+import { FrankSketch } from './ui/FrankSketch.tsx';
 
 export function Markdown({ text }: { text: string }) {
   return <>{blocks(text)}</>;
@@ -20,15 +21,21 @@ function blocks(text: string): ReactNode[] {
       continue;
     }
     if (line.trimStart().startsWith('```')) {
+      const language = line.trimStart().slice(3).trim().toLowerCase();
       const code: string[] = [];
       i++;
       while (i < lines.length && !lines[i]!.trimStart().startsWith('```'))
         code.push(lines[i++]!);
       i++;
+      const source = code.join('\n');
       out.push(
-        <pre key={out.length} className="md-code">
-          {code.join('\n')}
-        </pre>,
+        language === 'mermaid' ? (
+          <FrankSketch key={out.length} source={source} />
+        ) : (
+          <pre key={out.length} className="md-code">
+            {source}
+          </pre>
+        ),
       );
       continue;
     }
