@@ -86,7 +86,7 @@ fn claude_plans(
     files.sort_by_key(|f| std::cmp::Reverse(f.0));
     files.truncate(limit);
 
-    let transcripts = recent_transcripts(claude_dir, window, transcripts);
+    let mut sessions = Sessions::new(recent_transcripts(claude_dir, window, transcripts));
     files
         .into_iter()
         .filter_map(|(modified, path)| {
@@ -99,7 +99,7 @@ fn claude_plans(
                 source: PlanSource::ClaudeCode,
                 title: title_of(&body),
                 body,
-                project: project_for_plan(&transcripts, &name, guess_project),
+                project: sessions.project_for(&name, guess_project),
                 modified_at: rfc3339(modified),
                 origin: path.to_string_lossy().into_owned(),
             })
@@ -132,19 +132,48 @@ fn recent_transcripts(claude_dir: &Path, window: Duration, max: usize) -> Vec<Pa
     found.into_iter().take(max).map(|(_, p)| p).collect()
 }
 
-/// The working directory of the session that wrote the plan, or, when
-/// `guess` is set and no session mentions it, of the most recent session.
-fn project_for_plan(transcripts: &[PathBuf], plan_file: &str, guess: bool) -> Option<String> {
-    let tails: Vec<String> = transcripts.iter().filter_map(|t| tail(t).ok()).collect();
-    tails
-        .iter()
-        .find(|t| t.contains(plan_file))
-        .and_then(|t| last_cwd(t))
-        .or_else(|| {
-            guess
-                .then(|| tails.first().and_then(|t| last_cwd(t)))
-                .flatten()
-        })
+/// Session transcripts, each tail read at most once and only when needed:
+/// the newest plans are usually in the newest sessions.
+struct Sessions {
+    paths: Vec<PathBuf>,
+    /// Tails read so far, in order: the text and its last `cwd`.
+    read: Vec<(String, Option<String>)>,
+}
+
+impl Sessions {
+    fn new(paths: Vec<PathBuf>) -> Self {
+        Self {
+            paths,
+            read: Vec::new(),
+        }
+    }
+
+    /// The `i`th transcript's tail, reading it if it hasn't been.
+    fn get(&mut self, i: usize) -> Option<&(String, Option<String>)> {
+        while self.read.len() <= i {
+            let path = self.paths.get(self.read.len())?;
+            let text = tail(path).unwrap_or_default();
+            let cwd = last_cwd(&text);
+            self.read.push((text, cwd));
+        }
+        self.read.get(i)
+    }
+
+    /// The working directory of the session that wrote the plan, or, when
+    /// `guess` is set and no session mentions it, of the most recent session.
+    fn project_for(&mut self, plan_file: &str, guess: bool) -> Option<String> {
+        let mut i = 0;
+        while let Some((text, cwd)) = self.get(i) {
+            if text.contains(plan_file) {
+                return cwd.clone();
+            }
+            i += 1;
+        }
+        if !guess {
+            return None;
+        }
+        self.get(0).and_then(|(_, cwd)| cwd.clone())
+    }
 }
 
 fn tail(path: &Path) -> std::io::Result<String> {
@@ -158,7 +187,10 @@ fn tail(path: &Path) -> std::io::Result<String> {
 
 /// The last `"cwd": "..."` value in a chunk of JSON lines.
 fn last_cwd(text: &str) -> Option<String> {
-    let re = regex::Regex::new(r#""cwd"\s*:\s*("(?:[^"\\]|\\.)*")"#).expect("valid regex");
+    static CWD: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let re = CWD.get_or_init(|| {
+        regex::Regex::new(r#""cwd"\s*:\s*("(?:[^"\\]|\\.)*")"#).expect("valid regex")
+    });
     let raw = re.captures_iter(text).last()?.get(1)?.as_str();
     serde_json::from_str::<String>(raw)
         .ok()
@@ -232,6 +264,38 @@ mod tests {
         // Just written, a plan no session mentions still gets the latest project.
         let recent = recent_claude_plans(claude.path(), Duration::from_secs(600));
         assert!(recent.iter().all(|p| p.project.is_some()));
+    }
+
+    #[test]
+    fn reads_each_session_once_and_only_as_far_as_needed() {
+        let claude = tempfile::tempdir().unwrap();
+        let paths: Vec<PathBuf> = ["new", "mid", "old"]
+            .iter()
+            .map(|name| {
+                let path = claude.path().join(format!("{name}.jsonl"));
+                write(
+                    &path,
+                    &format!("{{\"cwd\":\"/p/{name}\",\"message\":\"plans/{name}-plan.md\"}}\n"),
+                );
+                path
+            })
+            .collect();
+        let mut sessions = Sessions::new(paths);
+        assert_eq!(
+            sessions.project_for("new-plan.md", false).as_deref(),
+            Some("/p/new")
+        );
+        assert_eq!(sessions.read.len(), 1, "the newest session was enough");
+        assert_eq!(
+            sessions.project_for("old-plan.md", false).as_deref(),
+            Some("/p/old")
+        );
+        assert_eq!(sessions.project_for("nobody.md", false), None);
+        assert_eq!(
+            sessions.project_for("nobody.md", true).as_deref(),
+            Some("/p/new")
+        );
+        assert_eq!(sessions.read.len(), 3, "each session read once");
     }
 
     #[test]

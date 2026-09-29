@@ -508,6 +508,19 @@ describe('voice first', () => {
     expect(c.getSnapshot().gist).toMatch(/^Adds a per-key limit/);
   });
 
+  it('typing instead turns the microphone off, until you pick it back up', async () => {
+    const { host, c } = await startSession({ utterances: [] });
+    c.beginCalls();
+    await c.stopSpeaking();
+    await settle(c, (x) => x.getSnapshot().handsFree?.state === 'waiting');
+    c.setTyping(true);
+    await settle(c, (x) => x.getSnapshot().handsFree === undefined);
+    expect(host.calls).toContain('handsFreeStop');
+    c.setTyping(false);
+    await c.toggleHandsFree();
+    await settle(c, (x) => x.getSnapshot().handsFree !== undefined);
+  });
+
   it('chat mode keeps to the panel', async () => {
     const { host, c } = await startSession({ mode: 'chat', utterances: [] });
     c.beginCalls();
@@ -562,6 +575,22 @@ describe('the plans home', () => {
     await c.start();
     expect(c.getSnapshot().view.name).toBe('plans');
     expect(host.calls).toContain('pinned true');
+  });
+
+  it('shows the plans he knows at once, while he looks further back', async () => {
+    const { host, c } = await startSession({ mode: 'chat' });
+    const history = host.planHistory.bind(host);
+    let arrive = () => {};
+    host.planHistory = () =>
+      new Promise((resolve) => (arrive = () => void history().then(resolve)));
+    const opening = c.showPlans();
+    expect(c.getSnapshot().view.name).toBe('plans');
+    expect(c.getSnapshot().history.map((p) => p.title)).toEqual([
+      'Add rate limiting to the public API',
+    ]);
+    arrive();
+    await opening;
+    expect(c.getSnapshot().history).toHaveLength(3);
   });
 
   it('picks a plan by voice, and comes back to where you left off', async () => {

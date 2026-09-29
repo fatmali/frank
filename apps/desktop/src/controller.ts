@@ -410,9 +410,8 @@ export class PanelController {
 
   /** Runs when the panel opens: loads the newest plan, or resumes. */
   async start(): Promise<void> {
-    const config = await this.host.getConfig();
+    const [config] = await Promise.all([this.host.getConfig(), this.refreshPacks()]);
     this.set({ config, noteCopied: false, notice: undefined });
-    await this.refreshPacks();
     if (!config.brain.kind) {
       this.set({ view: { name: 'onboarding' } });
       void this.host.setPinned(true);
@@ -452,11 +451,16 @@ export class PanelController {
     // Stay open while the developer picks, or fetches a plan to drop or paste.
     void this.host.setPinned(true);
     this.setMood('idle');
-    const found = await this.host.planHistory().catch(() => [] as Plan[]);
     const kept = [...this.stash.values()].map((s) => s.session.context.plan);
     const current = this.state.plan ? [this.state.plan] : [];
-    const history = uniquePlans([...current, ...kept, ...this.state.plans, ...found]);
+    const known = [...current, ...kept, ...this.state.plans];
+    // Show the plans Frank already knows while he looks further back.
+    this.set({ history: uniquePlans([...known, ...this.state.history]) });
+    const found = await this.host.planHistory().catch(() => [] as Plan[]);
+    const history = uniquePlans([...known, ...found]);
     this.set({ history });
+    // Picked one while Frank looked: nothing to ask.
+    if (this.state.view.name !== 'plans') return;
     if (ask && this.voiceFirst && history.length) {
       this.say([
         { text: history.length === 1 ? 'Talk this one through?' : 'Which plan?' },
@@ -707,6 +711,8 @@ export class PanelController {
   /** Voice mode: swap the voice bar for a text box, or back. */
   setTyping(typing: boolean): void {
     this.set({ typing });
+    // Typing instead: the microphone goes off until you pick it back up.
+    if (typing && this.state.handsFree) void this.stopHandsFree();
   }
 
   toggleVoiceMenu(open = !this.state.voiceMenuOpen): void {

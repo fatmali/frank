@@ -287,9 +287,13 @@ pub fn show_panel(app: &AppHandle, anchor: Anchor) {
     let _ = panel.show();
     let _ = panel.set_focus();
     let _ = app.emit_to(PANEL, "panel-shown", ());
-    // Frank may talk as soon as the read starts: have his voice ready.
+    // Frank may talk as soon as the read starts: have his voice ready. Loading
+    // it takes every core for a moment, so let the panel draw first.
     let warm = app.clone();
-    std::thread::spawn(move || warm.state::<crate::speech::Speech>().warm_up());
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(400));
+        warm.state::<crate::speech::Speech>().warm_up();
+    });
 }
 
 /// Hides the panel. With no sticky Frank on screen, the whole app hides too,

@@ -11,5 +11,6 @@ export function useController(): PanelController {
 
 export function usePanel(): PanelState {
   const c = useController();
-  return useSyncExternalStore(c.subscribe, c.getSnapshot);
+  // The same snapshot "on the server", so the render tests can draw the panel.
+  return useSyncExternalStore(c.subscribe, c.getSnapshot, c.getSnapshot);
 }
