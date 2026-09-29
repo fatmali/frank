@@ -18,11 +18,23 @@ github-copilot-sdk = { version = "1.0.15", optional = true }
 async-trait = "0.1"
 dirs = "6"
 regex = "1"
+# HTTP for the API and Ollama brains; the same TLS stack the Copilot SDK already uses.
+reqwest = { version = "0.13", default-features = false, features = ["http2", "json", "native-tls", "system-proxy"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 tokio = { version = "1", features = ["io-util", "macros", "net", "process", "rt-multi-thread", "sync", "time"] }
 toml = "0.9"
+
+# API keys live in the OS keychain.
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", features = ["apple-native"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3", features = ["windows-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3", features = ["async-secret-service", "tokio", "crypto-rust"] }
 
 [dev-dependencies]
 tempfile = "3"

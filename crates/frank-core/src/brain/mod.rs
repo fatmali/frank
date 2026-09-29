@@ -5,9 +5,13 @@
 //! A brain streams text into an `mpsc` channel. To cancel, drop the receiver:
 //! the brain notices on its next send and stops (child processes are killed).
 
+pub mod anthropic;
 pub mod claude_code;
 #[cfg(feature = "copilot")]
 pub mod copilot;
+pub mod http;
+pub mod ollama;
+pub mod openai;
 
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
@@ -77,6 +81,41 @@ pub trait Brain: Send + Sync {
     ) -> Result<(), BrainError>;
 }
 
+/// The brain `config` picks, or `None` if it names none Frank knows. API keys
+/// come from `store`, which may block on the keychain: call from a blocking
+/// task. A brain that isn't set up still comes back; its `detect` says what's
+/// missing.
+pub fn from_config(
+    config: &crate::config::BrainConfig,
+    store: &dyn crate::secrets::KeyStore,
+) -> Option<Box<dyn Brain>> {
+    use crate::secrets::{Provider, api_key};
+    let model = config.model.clone().filter(|m| !m.is_empty());
+    let base_url = config.base_url.clone().filter(|u| !u.is_empty());
+    let key = |p| api_key(store, p).map(|(key, _)| key);
+    Some(match config.kind.as_str() {
+        "claude-code" => Box::new(claude_code::ClaudeCode {
+            model,
+            ..Default::default()
+        }),
+        #[cfg(feature = "copilot")]
+        "copilot" => Box::new(copilot::Copilot::new(model)),
+        "anthropic" => Box::new(anthropic::Anthropic::new(
+            key(Provider::Anthropic),
+            model,
+            base_url,
+        )),
+        "openai" => Box::new(openai::OpenAi::official(key(Provider::OpenAi), model)),
+        "openai-compatible" => Box::new(openai::OpenAi::compatible(
+            key(Provider::OpenAiCompatible),
+            model,
+            base_url,
+        )),
+        "ollama" => Box::new(ollama::Ollama::new(model, base_url)),
+        _ => return None,
+    })
+}
+
 /// Flattens a conversation into one prompt, for brains that take a single
 /// prompt (agent CLIs in headless mode). The system prompt is passed separately.
 pub fn render_transcript(messages: &[Message]) -> String {
@@ -105,6 +144,32 @@ mod tests {
         let req: BrainRequest = serde_json::from_str(json).unwrap();
         assert_eq!(req.messages[0].role, Role::User);
         assert!(req.json_schema.is_some());
+    }
+
+    #[test]
+    fn builds_the_configured_brain() {
+        use crate::config::BrainConfig;
+        use crate::secrets::MemoryStore;
+        let store = MemoryStore::default();
+        for kind in [
+            "claude-code",
+            "anthropic",
+            "openai",
+            "openai-compatible",
+            "ollama",
+        ] {
+            let config = BrainConfig {
+                kind: kind.into(),
+                ..Default::default()
+            };
+            let brain = from_config(&config, &store).expect(kind);
+            assert_eq!(brain.id(), kind);
+        }
+        let unknown = BrainConfig {
+            kind: "carrier-pigeon".into(),
+            ..Default::default()
+        };
+        assert!(from_config(&unknown, &store).is_none());
     }
 
     #[test]
