@@ -14,7 +14,7 @@ default = ["copilot"]
 copilot = ["dep:github-copilot-sdk"]
 
 [dependencies]
-github-copilot-sdk = { version = "1.0.15", optional = true }
+github-copilot-sdk = { version = "1.0.15", optional = true, default-features = false }
 async-trait = "0.1"
 dirs = "6"
 regex = "1"

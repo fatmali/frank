@@ -9,3 +9,9 @@ edition = "2024"
 license = "MIT"
 repository = "https://github.com/fatmali/frank"
 rust-version = "1.94"
+
+# Smaller app downloads: strip symbols and optimise across crates.
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
